@@ -1,0 +1,13 @@
+@import "tailwindcss";
+
+/* 
+  Para o overlay funcionar perfeitamente no OBS, o fundo deve ser transparente.
+  Mas para o admin, queremos a cor de fundo garantida no AdminLayout,
+  então o id root deve ser height 100%
+*/
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background-color: transparent;
+}

@@ -1,0 +1,6 @@
+{
+  "name": "DoutrinaHUD",
+  "description": "Professional CS2 HUD Manager (Brazilian Portuguese)",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
