@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { db } from '../../database/index.js';
 import teamsRoutes from './teams.js';
+import gsiRoutes from './gsi.js';
 
 const router = Router();
 
@@ -28,5 +29,6 @@ router.get('/stats', (req, res) => {
 });
 
 router.use('/teams', teamsRoutes);
+router.use('/gsi', gsiRoutes);
 
 export default router;

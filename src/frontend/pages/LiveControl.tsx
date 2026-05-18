@@ -33,6 +33,10 @@ export function LiveControl() {
   const [sideHome, setSideHome] = useState<'CT' | 'TR'>('CT');
   const [matchStatus, setMatchStatus] = useState('Warmup');
 
+  // GSI Auto Mode
+  const [autoMode, setAutoMode] = useState(false);
+  const [gsiData, setGsiData] = useState<any>(null);
+
   useEffect(() => {
     // Attempt to fetch real teams to blend with mock if available
     fetch('/api/teams')
@@ -45,6 +49,47 @@ export function LiveControl() {
       .catch(() => {});
   }, []);
 
+  useEffect(() => {
+    if (!socket || !connected) return;
+
+    const handleGsi = (data: any) => {
+      setGsiData(data);
+    };
+
+    socket.on('gsi:update', handleGsi);
+
+    return () => {
+      socket.off('gsi:update', handleGsi);
+    };
+  }, [socket, connected]);
+
+  useEffect(() => {
+    if (!autoMode || !gsiData || !gsiData.map) return;
+
+    const map = gsiData.map;
+    
+    // Sync Scores based on current side
+    if (sideHome === 'CT') {
+      setScoreHome(map.team_ct?.score || 0);
+      setScoreAway(map.team_t?.score || 0);
+    } else {
+      setScoreHome(map.team_t?.score || 0);
+      setScoreAway(map.team_ct?.score || 0);
+    }
+
+    // Sync Match Status
+    if (map.phase === 'warmup') {
+      setMatchStatus('Warmup');
+    } else if (map.phase === 'intermission') {
+      setMatchStatus('Pause'); // Halftime or Pause
+    } else if (map.phase === 'gameover') {
+      setMatchStatus('Finished');
+    } else if (map.phase === 'live') {
+      setMatchStatus('Live');
+    }
+
+  }, [gsiData, autoMode, sideHome]);
+
   const handleSyncOverlay = () => {
     if (!socket || !connected) return;
     
@@ -54,6 +99,7 @@ export function LiveControl() {
     socket.emit('hud:command', {
       type: 'SYNC',
       forceUpdate: true,
+      autoMode,
       match: {
         teamHome: teamHome || null,
         teamAway: teamAway || null,
@@ -75,7 +121,7 @@ export function LiveControl() {
 
   useEffect(() => {
     syncState();
-  }, [scoreHome, scoreAway, sideHome, matchStatus, currentMap, format, stage, teamHomeId, teamAwayId]);
+  }, [scoreHome, scoreAway, sideHome, matchStatus, currentMap, format, stage, teamHomeId, teamAwayId, autoMode]);
 
   const addScore = (team: 'home' | 'away', amount: number) => {
     if (team === 'home') setScoreHome(prev => Math.max(0, prev + amount));
@@ -115,16 +161,29 @@ export function LiveControl() {
           <p className="text-neutral-400 text-sm mt-1">Configure o overlay e atualize o placar em tempo real.</p>
         </div>
         
-        <button 
-          onClick={handleSyncOverlay}
-          className={cn(
-            "px-5 py-2.5 rounded-lg font-bold text-sm transition-colors flex items-center justify-center gap-2 shadow-lg shrink-0",
-            connected ? "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-900/20" : "bg-neutral-800 text-neutral-500 cursor-not-allowed"
-          )}
-        >
-          <MonitorPlay className="w-4 h-4" />
-          Forçar Sync Overlay
-        </button>
+        <div className="flex gap-2">
+          <button 
+            onClick={() => setAutoMode(prev => !prev)}
+            className={cn(
+              "px-5 py-2.5 rounded-lg font-bold text-sm transition-colors flex items-center justify-center gap-2 shadow-lg shrink-0",
+              autoMode ? "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-900/20" : "bg-neutral-800 text-neutral-400 border border-neutral-700 hover:text-white hover:bg-neutral-700"
+            )}
+          >
+            <MonitorPlay className="w-4 h-4" />
+            {autoMode ? "AUTO GSI: ON" : "AUTO GSI: OFF"}
+          </button>
+
+          <button 
+            onClick={handleSyncOverlay}
+            className={cn(
+              "px-5 py-2.5 rounded-lg font-bold text-sm transition-colors flex items-center justify-center gap-2 shadow-lg shrink-0",
+              connected ? "bg-blue-600 hover:bg-blue-500 text-white shadow-blue-900/20" : "bg-neutral-800 text-neutral-500 cursor-not-allowed"
+            )}
+            title="Sincronizar manualmente"
+          >
+            <RefreshCcw className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 overflow-y-auto pb-6">
