@@ -13,8 +13,19 @@ export function SocketProvider({ children }: { children: ReactNode }) {
   const [connected, setConnected] = useState(false);
 
   useEffect(() => {
-    // Conectar ao mesmo host e porta do app
-    const socketIo = io(window.location.origin);
+    // Roteamento inteligente: usa localhost no desenvolvimento, e a URL do ngrok no GitHub Pages
+    const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    const socketUrl = isLocal 
+      ? 'http://localhost:3000' 
+      : 'https://shower-disfigure-subject.ngrok-free.dev';
+
+    const socketIo = io(socketUrl, {
+      // O ngrok gratuito intercepta a primeira conexão com uma tela de aviso HTML.
+      // Este header pula essa tela, garantindo que o Socket.io conecte direto ao backend.
+      extraHeaders: {
+        "ngrok-skip-browser-warning": "true"
+      }
+    });
     
     socketIo.on('connect', () => {
       setConnected(true);
