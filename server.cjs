@@ -267,28 +267,9 @@ async function startServer() {
   });
   const PORT = 3e3;
   initializeSchema();
-  app.use(import_express4.default.json({ limit: "50mb" }));
-  app.use(import_express4.default.urlencoded({ extended: true, limit: "50mb" }));
-  app.use((req, res, next) => {
-    if (!req.headers["content-type"] || req.is("text/plain")) {
-      let data = "";
-      req.on("data", (chunk) => {
-        data += chunk.toString();
-      });
-      req.on("end", () => {
-        try {
-          if (data) req.body = JSON.parse(data);
-        } catch (e) {
-        }
-        next();
-      });
-    } else {
-      next();
-    }
-  });
-  app.post("/gsi", (req, res) => {
+  app.use(import_express4.default.json());
+  app.post("/gsi", async (req, res) => {
     try {
-      console.log("GSI received from CS2");
       const gameState = req.body;
       const payload = {
         provider: gameState.provider || null,
@@ -316,11 +297,9 @@ async function startServer() {
           activity: gameState.player?.activity || null,
           match_stats: gameState.player?.match_stats || null,
           state: gameState.player?.state || null,
-          // Contains health, armor, helmet, flashed, burning, money, round_kills, round_killhs, equipments_value
           weapons: gameState.player?.weapons || null
         },
         allplayers: gameState.allplayers || null,
-        // Contains deep state of all players (team, match_stats, weapons, state)
         phase_countdowns: {
           phase: gameState.phase_countdowns?.phase || null,
           phase_ends_in: gameState.phase_countdowns?.phase_ends_in || null
@@ -333,9 +312,8 @@ async function startServer() {
         auth: gameState.auth || null
       };
       io.emit("gsi:update", payload);
-      Promise.resolve().then(() => (init_gsiEmitter(), gsiEmitter_exports)).then(({ gsiEmitter: gsiEmitter2 }) => {
-        gsiEmitter2.emit("gsi:update", payload);
-      });
+      const { gsiEmitter: gsiEmitter2 } = await Promise.resolve().then(() => (init_gsiEmitter(), gsiEmitter_exports));
+      gsiEmitter2.emit("gsi:update", payload);
       return res.sendStatus(200);
     } catch (error) {
       console.error("Erro ao processar GSI:", error);
@@ -363,7 +341,6 @@ async function startServer() {
   }
   server.listen(PORT, "0.0.0.0", () => {
     console.log(`DoutrinaHUD Server rodando na porta ${PORT}`);
-    console.log(`GSI aguardando em: http://127.0.0.1:${PORT}/gsi`);
   });
 }
 startServer();
