@@ -1,22 +1,16 @@
 {
-  "name": "doutrinahud",
+  "name": "react-example",
   "private": true,
-  "version": "1.0.0",
+  "version": "0.0.0",
   "type": "module",
-
-  "homepage": "https://diskcell.github.io/DoutrinaHUD/",
-
   "scripts": {
-    "dev": "vite",
-    "server": "tsx server.ts",
+    "dev": "tsx server.ts",
     "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
     "start": "node dist/server.cjs",
     "preview": "vite preview",
-    "deploy": "npm run build && gh-pages -d dist",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit"
   },
-
   "dependencies": {
     "@google/genai": "^1.29.0",
     "@tailwindcss/vite": "^4.1.14",
@@ -35,16 +29,15 @@
     "tailwind-merge": "^3.6.0",
     "vite": "^6.2.3"
   },
-
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
     "@types/express": "^4.17.21",
     "@types/node": "^22.14.0",
     "autoprefixer": "^10.4.21",
     "esbuild": "^0.25.0",
-    "gh-pages": "^6.1.1",
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
-    "typescript": "~5.8.2"
+    "typescript": "~5.8.2",
+    "vite": "^6.2.3"
   }
 }

@@ -47,4 +47,21 @@ export function initializeSchema() {
       FOREIGN KEY (team_away_id) REFERENCES teams(id)
     );
   `);
+
+  // Migration: Add new columns if they do not exist
+  const addColumn = (table: string, column: string, type: string) => {
+    try {
+      db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type};`);
+    } catch (e: any) {
+      if (!e.message.includes('duplicate column name')) {
+         console.warn(`Could not add column ${column} to ${table}:`, e.message);
+      }
+    }
+  };
+
+  addColumn('teams', 'tag', 'TEXT');
+  addColumn('teams', 'country', 'TEXT');
+  addColumn('teams', 'organization', 'TEXT');
+  addColumn('teams', 'social_links', 'TEXT');
+  addColumn('teams', 'status', 'TEXT DEFAULT "active"');
 }
