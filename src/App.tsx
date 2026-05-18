@@ -8,6 +8,7 @@ import { SocketProvider } from './context/SocketContext';
 import { AdminLayout } from './frontend/components/AdminLayout';
 import { Dashboard } from './frontend/pages/Dashboard';
 import { Teams } from './frontend/pages/Teams';
+import { Players } from './frontend/pages/Players';
 import { OverlayView } from './overlay/OverlayView';
 
 export default function App() {
@@ -24,7 +25,7 @@ export default function App() {
             {/* Placeholders for future routes */}
             <Route path="matches" element={<div className="text-neutral-400">Gerenciamento de Partidas (Em breve)</div>} />
             <Route path="teams" element={<Teams />} />
-            <Route path="players" element={<div className="text-neutral-400">Gerenciamento de Jogadores (Em breve)</div>} />
+            <Route path="players" element={<Players />} />
             <Route path="live" element={<div className="text-neutral-400">Controle ao Vivo (Em breve)</div>} />
             <Route path="settings" element={<div className="text-neutral-400">Configurações (Em breve)</div>} />
           </Route>
