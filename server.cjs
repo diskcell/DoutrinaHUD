@@ -22,7 +22,7 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 ));
 
 // server.ts
-var import_express2 = __toESM(require("express"), 1);
+var import_express3 = __toESM(require("express"), 1);
 var import_http = __toESM(require("http"), 1);
 var import_path2 = __toESM(require("path"), 1);
 var import_socket = require("socket.io");
@@ -71,22 +71,120 @@ function initializeSchema() {
       FOREIGN KEY (team_away_id) REFERENCES teams(id)
     );
   `);
+  const addColumn = (table, column, type) => {
+    try {
+      db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type};`);
+    } catch (e) {
+      if (!e.message.includes("duplicate column name")) {
+        console.warn(`Could not add column ${column} to ${table}:`, e.message);
+      }
+    }
+  };
+  addColumn("teams", "tag", "TEXT");
+  addColumn("teams", "country", "TEXT");
+  addColumn("teams", "organization", "TEXT");
+  addColumn("teams", "social_links", "TEXT");
+  addColumn("teams", "status", 'TEXT DEFAULT "active"');
 }
 
 // backend/routes/api.ts
+var import_express2 = require("express");
+
+// backend/routes/teams.ts
 var import_express = require("express");
 var router = (0, import_express.Router)();
-router.get("/health", (req, res) => {
+router.get("/", (req, res) => {
+  try {
+    const teams = db.prepare("SELECT * FROM teams ORDER BY created_at DESC").all();
+    res.json(teams);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Erro ao buscar times" });
+  }
+});
+router.post("/", (req, res) => {
+  try {
+    const { name, tag, logo, country, organization, social_links, status } = req.body;
+    const socialLinksStr = typeof social_links === "object" ? JSON.stringify(social_links) : social_links;
+    const stmt = db.prepare(`
+      INSERT INTO teams (name, tag, logo, country, organization, social_links, status)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+    const info = stmt.run(
+      name || "",
+      tag || "",
+      logo || "",
+      country || "",
+      organization || "",
+      socialLinksStr || "",
+      status || "active"
+    );
+    res.json({ id: info.lastInsertRowid, success: true });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Erro ao criar time" });
+  }
+});
+router.put("/:id", (req, res) => {
+  try {
+    const { name, tag, logo, country, organization, social_links, status } = req.body;
+    const { id } = req.params;
+    const socialLinksStr = typeof social_links === "object" ? JSON.stringify(social_links) : social_links;
+    const stmt = db.prepare(`
+      UPDATE teams 
+      SET name = ?, tag = ?, logo = ?, country = ?, organization = ?, social_links = ?, status = ?
+      WHERE id = ?
+    `);
+    stmt.run(
+      name || "",
+      tag || "",
+      logo || "",
+      country || "",
+      organization || "",
+      socialLinksStr || "",
+      status || "active",
+      id
+    );
+    res.json({ success: true });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Erro ao atualizar time" });
+  }
+});
+router.delete("/:id", (req, res) => {
+  try {
+    const { id } = req.params;
+    const stmt = db.prepare("DELETE FROM teams WHERE id = ?");
+    stmt.run(id);
+    res.json({ success: true });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Erro ao deletar time" });
+  }
+});
+var teams_default = router;
+
+// backend/routes/api.ts
+var router2 = (0, import_express2.Router)();
+router2.get("/health", (req, res) => {
   res.json({ status: "ok", message: "DoutrinaHUD API rodando" });
 });
-router.get("/stats", (req, res) => {
-  res.json({
-    teams: 0,
-    players: 0,
-    activeMatches: 0
-  });
+router2.get("/stats", (req, res) => {
+  try {
+    const teamsCount = db.prepare("SELECT COUNT(*) as count FROM teams").get();
+    const playersCount = db.prepare("SELECT COUNT(*) as count FROM players").get();
+    const matchesCount = db.prepare('SELECT COUNT(*) as count FROM matches WHERE status = "active"').get();
+    res.json({
+      teams: teamsCount.count,
+      players: playersCount.count,
+      activeMatches: matchesCount.count
+    });
+  } catch (error) {
+    res.json({ teams: 0, players: 0, activeMatches: 0 });
+  }
 });
-var api_default = router;
+router2.use("/teams", teams_default);
+var api_default = router2;
 
 // backend/socket/handlers.ts
 function setupSocket(io) {
@@ -108,14 +206,14 @@ function setupSocket(io) {
 
 // server.ts
 async function startServer() {
-  const app = (0, import_express2.default)();
+  const app = (0, import_express3.default)();
   const server = import_http.default.createServer(app);
   const io = new import_socket.Server(server, {
     cors: { origin: "*" }
   });
   const PORT = 3e3;
   initializeSchema();
-  app.use(import_express2.default.json());
+  app.use(import_express3.default.json());
   app.use("/api", api_default);
   setupSocket(io);
   if (process.env.NODE_ENV !== "production") {
@@ -126,7 +224,7 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     const distPath = import_path2.default.join(process.cwd(), "dist");
-    app.use(import_express2.default.static(distPath));
+    app.use(import_express3.default.static(distPath));
     app.get("*", (req, res) => {
       res.sendFile(import_path2.default.join(distPath, "index.html"));
     });
