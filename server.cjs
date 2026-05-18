@@ -267,7 +267,25 @@ async function startServer() {
   });
   const PORT = 3e3;
   initializeSchema();
-  app.use(import_express4.default.json());
+  app.use(import_express4.default.json({ limit: "50mb" }));
+  app.use(import_express4.default.urlencoded({ extended: true, limit: "50mb" }));
+  app.use((req, res, next) => {
+    if (!req.headers["content-type"] || req.is("text/plain")) {
+      let data = "";
+      req.on("data", (chunk) => {
+        data += chunk.toString();
+      });
+      req.on("end", () => {
+        try {
+          if (data) req.body = JSON.parse(data);
+        } catch (e) {
+        }
+        next();
+      });
+    } else {
+      next();
+    }
+  });
   app.post("/gsi", (req, res) => {
     try {
       console.log("GSI received from CS2");
