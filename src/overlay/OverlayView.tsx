@@ -123,11 +123,7 @@ export function OverlayView() {
         gsiState={gsiState} 
       />
       
-      {/* Economy Bars */}
-      <EconomyBar players={leftPlayers} isRightSide={false} isAutoMode={autoMode} />
-      <EconomyBar players={rightPlayers} isRightSide={true} isAutoMode={autoMode} />
-
-      {/* Player Panels (Bottom Horizon) */}
+      {/* Player Panels (Vertical Stack on sides) */}
       <PlayerPanels 
         players={leftPlayers}
         isRightSide={false}
