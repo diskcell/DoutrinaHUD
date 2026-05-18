@@ -22,7 +22,7 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 ));
 
 // server.ts
-var import_express3 = __toESM(require("express"), 1);
+var import_express4 = __toESM(require("express"), 1);
 var import_http = __toESM(require("http"), 1);
 var import_path2 = __toESM(require("path"), 1);
 var import_socket = require("socket.io");
@@ -88,7 +88,7 @@ function initializeSchema() {
 }
 
 // backend/routes/api.ts
-var import_express2 = require("express");
+var import_express3 = require("express");
 
 // backend/routes/teams.ts
 var import_express = require("express");
@@ -164,12 +164,37 @@ router.delete("/:id", (req, res) => {
 });
 var teams_default = router;
 
-// backend/routes/api.ts
+// backend/routes/gsi.ts
+var import_express2 = require("express");
+
+// backend/socket/gsiEmitter.ts
+var import_events = require("events");
+var GSIEmitter = class extends import_events.EventEmitter {
+};
+var gsiEmitter = new GSIEmitter();
+
+// backend/routes/gsi.ts
 var router2 = (0, import_express2.Router)();
-router2.get("/health", (req, res) => {
+router2.post("/", (req, res) => {
+  try {
+    const data = req.body;
+    if (data && data.provider && data.provider.appid === 730) {
+      gsiEmitter.emit("gsi:update", data);
+    }
+    res.status(200).send("OK");
+  } catch (error) {
+    console.error("Erro ao processar GSI:", error);
+    res.status(500).send("Error");
+  }
+});
+var gsi_default = router2;
+
+// backend/routes/api.ts
+var router3 = (0, import_express3.Router)();
+router3.get("/health", (req, res) => {
   res.json({ status: "ok", message: "DoutrinaHUD API rodando" });
 });
-router2.get("/stats", (req, res) => {
+router3.get("/stats", (req, res) => {
   try {
     const teamsCount = db.prepare("SELECT COUNT(*) as count FROM teams").get();
     const playersCount = db.prepare("SELECT COUNT(*) as count FROM players").get();
@@ -183,19 +208,30 @@ router2.get("/stats", (req, res) => {
     res.json({ teams: 0, players: 0, activeMatches: 0 });
   }
 });
-router2.use("/teams", teams_default);
-var api_default = router2;
+router3.use("/teams", teams_default);
+router3.use("/gsi", gsi_default);
+var api_default = router3;
 
 // backend/socket/handlers.ts
+var latestHudState = null;
+var latestGsiData = null;
 function setupSocket(io) {
+  gsiEmitter.on("gsi:update", (data) => {
+    latestGsiData = data;
+    io.emit("gsi:update", data);
+  });
   io.on("connection", (socket) => {
     console.log("Novo cliente conectado:", socket.id);
     socket.on("overlay:ready", () => {
       console.log("Overlay inicializado no cliente", socket.id);
-      socket.emit("hud:update", { message: "Bem-vindo ao DoutrinaHUD" });
+      socket.emit("hud:update", latestHudState || { message: "Bem-vindo ao DoutrinaHUD" });
+      if (latestGsiData) {
+        socket.emit("gsi:update", latestGsiData);
+      }
     });
     socket.on("hud:command", (command) => {
-      console.log("Comando recebido do painel:", command);
+      console.log("Comando recebido do painel");
+      latestHudState = command;
       io.emit("hud:update", command);
     });
     socket.on("disconnect", () => {
@@ -206,14 +242,14 @@ function setupSocket(io) {
 
 // server.ts
 async function startServer() {
-  const app = (0, import_express3.default)();
+  const app = (0, import_express4.default)();
   const server = import_http.default.createServer(app);
   const io = new import_socket.Server(server, {
     cors: { origin: "*" }
   });
   const PORT = 3e3;
   initializeSchema();
-  app.use(import_express3.default.json());
+  app.use(import_express4.default.json());
   app.use("/api", api_default);
   setupSocket(io);
   if (process.env.NODE_ENV !== "production") {
@@ -224,7 +260,7 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     const distPath = import_path2.default.join(process.cwd(), "dist");
-    app.use(import_express3.default.static(distPath));
+    app.use(import_express4.default.static(distPath));
     app.get("*", (req, res) => {
       res.sendFile(import_path2.default.join(distPath, "index.html"));
     });
