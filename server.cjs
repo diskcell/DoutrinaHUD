@@ -4,6 +4,13 @@ var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
 var __getProtoOf = Object.getPrototypeOf;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __esm = (fn, res) => function __init() {
+  return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
+};
+var __export = (target, all) => {
+  for (var name in all)
+    __defProp(target, name, { get: all[name], enumerable: true });
+};
 var __copyProps = (to, from, except, desc) => {
   if (from && typeof from === "object" || typeof from === "function") {
     for (let key of __getOwnPropNames(from))
@@ -20,6 +27,21 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
   mod
 ));
+
+// backend/socket/gsiEmitter.ts
+var gsiEmitter_exports = {};
+__export(gsiEmitter_exports, {
+  gsiEmitter: () => gsiEmitter
+});
+var import_events, GSIEmitter, gsiEmitter;
+var init_gsiEmitter = __esm({
+  "backend/socket/gsiEmitter.ts"() {
+    import_events = require("events");
+    GSIEmitter = class extends import_events.EventEmitter {
+    };
+    gsiEmitter = new GSIEmitter();
+  }
+});
 
 // server.ts
 var import_express4 = __toESM(require("express"), 1);
@@ -166,14 +188,7 @@ var teams_default = router;
 
 // backend/routes/gsi.ts
 var import_express2 = require("express");
-
-// backend/socket/gsiEmitter.ts
-var import_events = require("events");
-var GSIEmitter = class extends import_events.EventEmitter {
-};
-var gsiEmitter = new GSIEmitter();
-
-// backend/routes/gsi.ts
+init_gsiEmitter();
 var router2 = (0, import_express2.Router)();
 router2.post("/", (req, res) => {
   try {
@@ -213,6 +228,7 @@ router3.use("/gsi", gsi_default);
 var api_default = router3;
 
 // backend/socket/handlers.ts
+init_gsiEmitter();
 var latestHudState = null;
 var latestGsiData = null;
 function setupSocket(io) {
@@ -245,16 +261,78 @@ async function startServer() {
   const app = (0, import_express4.default)();
   const server = import_http.default.createServer(app);
   const io = new import_socket.Server(server, {
-    cors: { origin: "*" }
+    cors: {
+      origin: "*"
+    }
   });
   const PORT = 3e3;
   initializeSchema();
   app.use(import_express4.default.json());
+  app.post("/gsi", (req, res) => {
+    try {
+      console.log("GSI received from CS2");
+      const gameState = req.body;
+      const payload = {
+        provider: gameState.provider || null,
+        map: {
+          name: gameState.map?.name || null,
+          phase: gameState.map?.phase || null,
+          round: gameState.map?.round || 0,
+          team_ct: gameState.map?.team_ct || null,
+          team_t: gameState.map?.team_t || null,
+          num_matches_to_win_series: gameState.map?.num_matches_to_win_series || 0,
+          current_spectator_count: gameState.map?.current_spectator_count || 0,
+          souvenirs_total: gameState.map?.souvenirs_total || 0
+        },
+        round: {
+          phase: gameState.round?.phase || null,
+          bomb: gameState.round?.bomb || null,
+          win_team: gameState.round?.win_team || null
+        },
+        player: {
+          steamid: gameState.player?.steamid || null,
+          name: gameState.player?.name || null,
+          clan: gameState.player?.clan || null,
+          observer_slot: gameState.player?.observer_slot || null,
+          team: gameState.player?.team || null,
+          activity: gameState.player?.activity || null,
+          match_stats: gameState.player?.match_stats || null,
+          state: gameState.player?.state || null,
+          // Contains health, armor, helmet, flashed, burning, money, round_kills, round_killhs, equipments_value
+          weapons: gameState.player?.weapons || null
+        },
+        allplayers: gameState.allplayers || null,
+        // Contains deep state of all players (team, match_stats, weapons, state)
+        phase_countdowns: {
+          phase: gameState.phase_countdowns?.phase || null,
+          phase_ends_in: gameState.phase_countdowns?.phase_ends_in || null
+        },
+        bomb: {
+          state: gameState.bomb?.state || null,
+          position: gameState.bomb?.position || null,
+          countdown: gameState.bomb?.countdown || null
+        },
+        auth: gameState.auth || null
+      };
+      io.emit("gsi:update", payload);
+      Promise.resolve().then(() => (init_gsiEmitter(), gsiEmitter_exports)).then(({ gsiEmitter: gsiEmitter2 }) => {
+        gsiEmitter2.emit("gsi:update", payload);
+      });
+      return res.sendStatus(200);
+    } catch (error) {
+      console.error("Erro ao processar GSI:", error);
+      return res.status(500).json({
+        error: "Erro ao processar Game State Integration"
+      });
+    }
+  });
   app.use("/api", api_default);
   setupSocket(io);
   if (process.env.NODE_ENV !== "production") {
     const vite = await (0, import_vite.createServer)({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true
+      },
       appType: "spa"
     });
     app.use(vite.middlewares);
@@ -267,6 +345,7 @@ async function startServer() {
   }
   server.listen(PORT, "0.0.0.0", () => {
     console.log(`DoutrinaHUD Server rodando na porta ${PORT}`);
+    console.log(`GSI aguardando em: http://127.0.0.1:${PORT}/gsi`);
   });
 }
 startServer();
