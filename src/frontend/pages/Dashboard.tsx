@@ -5,17 +5,19 @@ import { useSocket } from '../../context/SocketContext';
 interface OnlineSession {
   id: string;
   token: string;
+  controlToken: string;
   createdAt: number;
 }
 
 const ONLINE_SESSION_STORAGE_KEY = 'doutrinahud-online-session';
 
-function appUrl(path: string, sessionId: string) {
+function appUrl(path: string, sessionId: string, controlToken?: string) {
   const basePath = window.location.pathname.endsWith('/')
     ? window.location.pathname
     : `${window.location.pathname}/`;
 
-  return `${window.location.origin}${basePath}#${path}?session=${encodeURIComponent(sessionId)}`;
+  const controlQuery = controlToken ? `&control=${encodeURIComponent(controlToken)}` : '';
+  return `${window.location.origin}${basePath}#${path}?session=${encodeURIComponent(sessionId)}${controlQuery}`;
 }
 
 function getSavedOnlineSession(): OnlineSession | null {
@@ -121,7 +123,7 @@ export function Dashboard() {
   };
 
   const overlayUrl = onlineSession ? appUrl('/overlay', onlineSession.id) : '';
-  const controlUrl = onlineSession ? appUrl('/admin/live', onlineSession.id) : '';
+  const controlUrl = onlineSession ? appUrl('/admin/live', onlineSession.id, onlineSession.controlToken) : '';
 
   return (
     <div className="space-y-6">

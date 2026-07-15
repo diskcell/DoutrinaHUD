@@ -36,6 +36,9 @@ export function setupSocket(io: Server) {
     }
 
     socket.data.sessionId = session.id;
+    socket.data.canControl =
+      session.id === sessionService.localSessionId ||
+      sessionService.verifyControlToken(session.id, String(socket.handshake.auth?.controlToken || ''));
     socket.join(sessionService.roomName(session.id));
     console.log('Novo cliente conectado:', socket.id, 'sessao:', session.id);
 
@@ -56,6 +59,10 @@ export function setupSocket(io: Server) {
 
     // Eventos de Controle (Dashboard)
     socket.on('hud:command', (command: any) => {
+      if (!socket.data.canControl) {
+        socket.emit('session:error', { message: 'Chave de controle invalida.' });
+        return;
+      }
       console.log('Comando recebido do painel');
       const sessionId = socket.data.sessionId as string;
       const updatedSession = sessionService.updateHud(sessionId, command);

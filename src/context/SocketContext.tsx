@@ -100,6 +100,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       transports: ['websocket', 'polling'],
       auth: {
         sessionId,
+        controlToken: getUrlParams().get('control'),
       },
       reconnection: true,
       reconnectionAttempts: 20,
