@@ -1,0 +1,32 @@
+{
+  "map": "de_nuke",
+  "image": "radar.png",
+  "lower_image": "radar_lower.png",
+  "pos_x": -3453,
+  "pos_y": 2887,
+  "scale": 7,
+  "rotate": 0,
+  "zoom": 0,
+  "inset_left": 0.33,
+  "inset_top": 0.2,
+  "inset_right": 0.2,
+  "inset_bottom": 0.2,
+  "spawns": {
+    "ct": { "x": 0.82, "y": 0.45 },
+    "t": { "x": 0.19, "y": 0.54 }
+  },
+  "bombsites": {
+    "A": { "x": 0.58, "y": 0.48 },
+    "B": { "x": 0.58, "y": 0.58 }
+  },
+  "verticalsections": {
+    "default": {
+      "AltitudeMax": 10000,
+      "AltitudeMin": -495
+    },
+    "lower": {
+      "AltitudeMax": -495,
+      "AltitudeMin": -10000
+    }
+  }
+}
