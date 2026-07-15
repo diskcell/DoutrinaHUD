@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Copy, ExternalLink, Plus, Radio } from 'lucide-react';
+import { Copy, Download, ExternalLink, Plus, Radio } from 'lucide-react';
 import { useSocket } from '../../context/SocketContext';
 
 interface OnlineSession {
@@ -7,6 +7,8 @@ interface OnlineSession {
   token: string;
   createdAt: number;
 }
+
+const ONLINE_SESSION_STORAGE_KEY = 'doutrinahud-online-session';
 
 function appUrl(path: string, sessionId: string) {
   const basePath = window.location.pathname.endsWith('/')
@@ -16,9 +18,66 @@ function appUrl(path: string, sessionId: string) {
   return `${window.location.origin}${basePath}#${path}?session=${encodeURIComponent(sessionId)}`;
 }
 
+function getSavedOnlineSession(): OnlineSession | null {
+  try {
+    const savedSession = window.localStorage.getItem(ONLINE_SESSION_STORAGE_KEY);
+    if (!savedSession) return null;
+
+    const session = JSON.parse(savedSession) as Partial<OnlineSession>;
+    if (typeof session.id !== 'string' || typeof session.token !== 'string') return null;
+
+    return {
+      id: session.id,
+      token: session.token,
+      createdAt: typeof session.createdAt === 'number' ? session.createdAt : Date.now(),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function createOnlineGsiConfig(session: OnlineSession) {
+  const endpoint = `${window.location.origin}/gsi/${encodeURIComponent(session.id)}`;
+
+  return `"DoutrinaHUD"
+{
+  "uri" "${endpoint}"
+  "timeout" "5.0"
+  "buffer" "0.05"
+  "throttle" "0.05"
+  "heartbeat" "30.0"
+
+  "auth"
+  {
+    "token" "${session.token}"
+  }
+
+  "data"
+  {
+    "provider" "1"
+    "map" "1"
+    "round" "1"
+    "player_id" "1"
+    "player_state" "1"
+    "player_weapons" "1"
+    "player_match_stats" "1"
+    "allplayers_id" "1"
+    "allplayers_state" "1"
+    "allplayers_match_stats" "1"
+    "allplayers_weapons" "1"
+    "allplayers_position" "1"
+    "allplayers_forward" "1"
+    "phase_countdowns" "1"
+    "bomb" "1"
+    "allgrenades" "1"
+  }
+}
+`;
+}
+
 export function Dashboard() {
   const { connected, sessionId } = useSocket();
-  const [onlineSession, setOnlineSession] = useState<OnlineSession | null>(null);
+  const [onlineSession, setOnlineSession] = useState<OnlineSession | null>(getSavedOnlineSession);
   const [creatingSession, setCreatingSession] = useState(false);
   const [copiedValue, setCopiedValue] = useState<string | null>(null);
 
@@ -26,6 +85,18 @@ export function Dashboard() {
     await navigator.clipboard.writeText(value);
     setCopiedValue(label);
     window.setTimeout(() => setCopiedValue(null), 1800);
+  };
+
+  const downloadGsiConfig = () => {
+    if (!onlineSession) return;
+
+    const file = new Blob([createOnlineGsiConfig(onlineSession)], { type: 'text/plain' });
+    const url = URL.createObjectURL(file);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'gamestate_integration_doutrinahud.cfg';
+    link.click();
+    URL.revokeObjectURL(url);
   };
 
   const createOnlineSession = async () => {
@@ -38,7 +109,9 @@ export function Dashboard() {
         throw new Error('Nao foi possivel criar a sessao.');
       }
 
-      setOnlineSession(await response.json());
+      const session = (await response.json()) as OnlineSession;
+      window.localStorage.setItem(ONLINE_SESSION_STORAGE_KEY, JSON.stringify(session));
+      setOnlineSession(session);
     } catch (error) {
       console.error(error);
       alert('Nao foi possivel criar a sessao. Verifique se o servidor online esta conectado.');
@@ -107,7 +180,7 @@ export function Dashboard() {
                 <p className="font-mono text-sm text-white mt-1 break-all">{onlineSession.id}</p>
               </div>
               <div>
-                <p className="text-xs uppercase tracking-wide text-neutral-500">Token do conector</p>
+                <p className="text-xs uppercase tracking-wide text-neutral-500">Token da sessao</p>
                 <p className="font-mono text-xs text-white mt-1 break-all">{onlineSession.token}</p>
               </div>
               <button
@@ -117,6 +190,14 @@ export function Dashboard() {
               >
                 <Copy className="w-4 h-4" />
                 {copiedValue === 'token' ? 'Token copiado' : 'Copiar token'}
+              </button>
+              <button
+                type="button"
+                onClick={downloadGsiConfig}
+                className="inline-flex items-center gap-2 text-sm text-emerald-400 hover:text-emerald-300"
+              >
+                <Download className="w-4 h-4" />
+                Baixar CFG do CS2
               </button>
             </div>
 

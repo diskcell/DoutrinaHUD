@@ -2,11 +2,13 @@
 
 ## O que fica online
 
-O servidor online hospeda o painel, a API e o Socket.IO. O CS2 continua enviando o GSI para o computador do operador, e o Connector encaminha os dados para a sessao online.
+O servidor online hospeda o painel, a API e o Socket.IO. O CS2 pode enviar o GSI diretamente para a sessao online, sem instalar o projeto localmente.
 
 ```
-CS2 -> Connector local -> servidor DoutrinaHUD -> painel e overlay
+CS2 -> servidor DoutrinaHUD -> painel e overlay
 ```
+
+O Connector local continua disponivel somente como alternativa para operadores que preferirem manter a CFG apontando para `127.0.0.1`.
 
 ## Publicar o servidor
 
@@ -30,7 +32,17 @@ Abra esse dominio e use o painel remoto. GitHub Pages pode continuar como demons
 
 As sessoes atuais sao temporarias e permanecem disponiveis enquanto o servidor online estiver ligado.
 
-## Rodar o Connector
+## Configurar o CS2 sem projeto local
+
+No painel, depois de criar a sessao, clique em `Baixar CFG do CS2`. O arquivo ja contem o endereco HTTPS, ID e token privados da sessao.
+
+1. Copie o arquivo baixado para `game/csgo/cfg` na instalacao do Counter-Strike 2.
+2. Confirme que o nome e `gamestate_integration_doutrinahud.cfg`.
+3. Inicie ou reinicie o CS2 e abra o link da overlay no OBS.
+
+Esse e o fluxo indicado para qualquer pessoa que nao tenha o projeto DoutrinaHUD instalado. Nao compartilhe o arquivo CFG, pois ele contem o token que autoriza o envio dos dados da partida.
+
+## Rodar o Connector (alternativa)
 
 No computador que esta executando ou observando o CS2, dentro da pasta do projeto:
 
@@ -41,7 +53,7 @@ npm run connector -- --remote https://SEU-DOMINIO --session ID_DA_SESSAO --token
 
 O Connector deve permanecer aberto durante a partida. Ele recebe o GSI em `127.0.0.1:3000` e envia os dados para a sessao criada no painel.
 
-## Configurar o CS2
+## Configurar o CS2 com Connector
 
 Mantenha o arquivo `gamestate_integration_doutrinahud.cfg` na pasta `game/csgo/cfg` e use a URI local:
 
