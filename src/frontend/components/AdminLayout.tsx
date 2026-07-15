@@ -1,6 +1,6 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useSocket } from '../../context/SocketContext';
-import { LayoutDashboard, Users, Trophy, Radio, Settings, ShieldAlert, Layers } from 'lucide-react';
+import { LayoutDashboard, Users, Trophy, Radio, Settings, ShieldAlert, Layers, LogOut } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -21,6 +21,11 @@ export function AdminLayout() {
     { name: 'Overlays', icon: Layers, path: '/admin/overlays' },
     { name: 'Configurações', icon: Settings, path: '/admin/settings' },
   ];
+
+  const handleLogout = async () => {
+    await fetch('/api/auth/logout', { method: 'POST' });
+    window.location.reload();
+  };
 
   return (
     <div className="flex h-screen bg-neutral-900 text-white font-sans">
@@ -69,6 +74,14 @@ export function AdminLayout() {
             <Radio className="w-4 h-4" />
             Abrir Overlay
           </Link>
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="mt-2 flex items-center justify-center gap-2 w-full py-2 text-sm text-neutral-400 hover:text-red-300 hover:bg-red-500/10 rounded transition-colors"
+          >
+            <LogOut className="w-4 h-4" />
+            Sair da conta
+          </button>
         </div>
       </aside>
 
