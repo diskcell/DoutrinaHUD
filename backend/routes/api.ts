@@ -5,6 +5,7 @@ import gsiRoutes from './gsi.js';
 import steamRoutes from './steam.js';
 import overlaysRoutes from './overlays.js';
 import hltvRoutes from './hltv.js';
+import sessionsRoutes from './sessions.js';
 import { getTeams, getPlayers } from '../dataService.js';
 
 const router = Router();
@@ -36,5 +37,6 @@ router.use('/gsi', gsiRoutes);
 router.use('/steam', steamRoutes);
 router.use('/overlays', overlaysRoutes);
 router.use('/hltv', hltvRoutes);
+router.use('/sessions', sessionsRoutes);
 
 export default router;

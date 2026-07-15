@@ -1,5 +1,7 @@
 import { Router } from 'express';
 import { gsiEmitter } from '../socket/gsiEmitter.js';
+import { normalizeGameState } from '../gsi/normalizeGameState.js';
+import { sessionService } from '../online/sessionService.js';
 
 const router = Router();
 
@@ -9,7 +11,12 @@ router.post('/', (req, res) => {
     
     // Validate if it's a valid GSI payload
     if (data && data.provider && data.provider.appid === 730) {
-      gsiEmitter.emit('gsi:update', data);
+      const payload = normalizeGameState(data);
+      sessionService.updateGsi(sessionService.localSessionId, payload);
+      gsiEmitter.emit('gsi:update', {
+        sessionId: sessionService.localSessionId,
+        data: payload,
+      });
     }
     
     // CS2 GSI expects 200 OK

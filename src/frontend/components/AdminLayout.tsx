@@ -9,7 +9,7 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function AdminLayout() {
-  const { connected } = useSocket();
+  const { connected, sessionId } = useSocket();
   const location = useLocation();
 
   const menu = [
@@ -61,7 +61,11 @@ export function AdminLayout() {
               {connected ? 'Servidor Conectado' : 'Desconectado'}
             </span>
           </div>
-          <Link to="/overlay" target="_blank" className="mt-4 flex items-center justify-center gap-2 w-full py-2 bg-neutral-800 hover:bg-neutral-700 rounded text-sm text-neutral-300 transition-colors">
+          <Link
+            to={sessionId === 'local' ? '/overlay' : `/overlay?session=${encodeURIComponent(sessionId)}`}
+            target="_blank"
+            className="mt-4 flex items-center justify-center gap-2 w-full py-2 bg-neutral-800 hover:bg-neutral-700 rounded text-sm text-neutral-300 transition-colors"
+          >
             <Radio className="w-4 h-4" />
             Abrir Overlay
           </Link>

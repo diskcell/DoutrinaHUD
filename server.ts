@@ -7,6 +7,8 @@ import { createServer as createViteServer } from 'vite';
 import apiRoutes from './backend/routes/api.js';
 import { gsiEmitter } from './backend/socket/gsiEmitter.js';
 import { setupSocket } from './backend/socket/handlers.js';
+import { normalizeGameState } from './backend/gsi/normalizeGameState.js';
+import { sessionService } from './backend/online/sessionService.js';
 
 async function startServer() {
   const app = express();
@@ -19,7 +21,9 @@ async function startServer() {
     },
   });
 
-  const PORT = 3000;
+  const PORT = Number(process.env.PORT || 3000);
+  const isProduction =
+    process.env.NODE_ENV === 'production' || process.argv[1]?.endsWith('.cjs');
 
   app.set('etag', false);
 
@@ -138,7 +142,11 @@ async function startServer() {
       // Envia atualização para overlay e painel
 
       // Emissor adicional para integração interna
-      gsiEmitter.emit('gsi:update', payload);
+      sessionService.updateGsi(sessionService.localSessionId, payload);
+      gsiEmitter.emit('gsi:update', {
+        sessionId: sessionService.localSessionId,
+        data: payload,
+      });
 
       return res.sendStatus(200);
     } catch (error) {
@@ -150,6 +158,27 @@ async function startServer() {
     }
   });
 
+  app.post('/gsi/:sessionId', (req, res) => {
+    try {
+      const { sessionId } = req.params;
+      const token =
+        req.header('x-doutrinahud-session-token') || req.body?.auth?.token || null;
+
+      if (!sessionService.verifyToken(sessionId, token)) {
+        return res.status(401).json({ error: 'Token de sessao invalido.' });
+      }
+
+      const payload = normalizeGameState(req.body);
+      sessionService.updateGsi(sessionId, payload);
+      gsiEmitter.emit('gsi:update', { sessionId, data: payload });
+
+      return res.sendStatus(200);
+    } catch (error) {
+      console.error('Erro ao processar GSI remoto:', error);
+      return res.status(500).json({ error: 'Erro ao processar Game State Integration' });
+    }
+  });
+
   // API Routes
   app.use('/api', apiRoutes);
 
@@ -157,7 +186,7 @@ async function startServer() {
   setupSocket(io);
 
   // Vite Middleware
-  if (process.env.NODE_ENV !== 'production') {
+  if (!isProduction) {
     const vite = await createViteServer({
       server: {
         middlewareMode: true,

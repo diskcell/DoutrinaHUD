@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.git/
+.env
+database/*.db
+database/*.db-*
+public/uploads/
+backups/
+data/

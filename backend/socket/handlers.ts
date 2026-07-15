@@ -4,6 +4,7 @@ import { vetoService } from '../vetoService.js';
 import { initDatabase } from '../database/index.js';
 import { migrateJsonToSqlite } from '../database/migrate.js';
 import { liveStateRepository } from '../database/repositories/liveStateRepository.js';
+import { sessionService } from '../online/sessionService.js';
 
 // Inicializar Banco de Dados
 initDatabase();
@@ -12,39 +13,65 @@ migrateJsonToSqlite(); // Migrar dados dos JSONs antigos se o banco estiver vazi
 let latestHudState: any = liveStateRepository.get(); // Carregar do SQLite na inicialização
 let latestGsiData: any = null;
 
+sessionService.getOrCreateLocal(liveStateRepository.get());
+
 export function setupSocket(io: Server) {
   
   // Listen for internal server events (GSI POSTs) and broadcast to all connected clients
-  gsiEmitter.on('gsi:update', (data) => {
-    latestGsiData = data;
-    io.volatile.emit('gsi:update', data);
+  gsiEmitter.on('gsi:update', ({ sessionId, data }) => {
+    sessionService.updateGsi(sessionId, data);
+    io.to(sessionService.roomName(sessionId)).volatile.emit('gsi:update', data);
   });
 
   io.on('connection', (socket: Socket) => {
-    console.log('Novo cliente conectado:', socket.id);
+    const requestedSessionId = String(
+      socket.handshake.auth?.sessionId || socket.handshake.query.session || sessionService.localSessionId
+    );
+    const session = sessionService.get(requestedSessionId);
+
+    if (!session) {
+      socket.emit('session:error', { message: 'Sessao nao encontrada.' });
+      socket.disconnect(true);
+      return;
+    }
+
+    socket.data.sessionId = session.id;
+    socket.join(sessionService.roomName(session.id));
+    console.log('Novo cliente conectado:', socket.id, 'sessao:', session.id);
 
     // Eventos do HUD (Overlay)
     socket.on('overlay:ready', () => {
       console.log('Overlay inicializado no cliente', socket.id);
       // Enviar estado atual do HUD e GSI para o cliente recém-conectado
-      socket.emit('hud:update', latestHudState || { message: 'Bem-vindo ao DoutrinaHUD' });
-      if (latestGsiData) {
-        socket.emit('gsi:update', latestGsiData);
+      const activeSession = sessionService.get(socket.data.sessionId);
+
+      socket.emit(
+        'hud:update',
+        activeSession?.latestHudState || { message: 'Bem-vindo ao DoutrinaHUD' }
+      );
+      if (activeSession?.latestGsiData) {
+        socket.emit('gsi:update', activeSession.latestGsiData);
       }
     });
 
     // Eventos de Controle (Dashboard)
     socket.on('hud:command', (command: any) => {
       console.log('Comando recebido do painel');
-      latestHudState = command;
+      const sessionId = socket.data.sessionId as string;
+      const updatedSession = sessionService.updateHud(sessionId, command);
+
+      if (!updatedSession) {
+        socket.emit('session:error', { message: 'Sessao nao encontrada.' });
+        return;
+      }
       
       // Salvar estado no SQLite para persistência
-      if (command.type === 'SYNC') {
+      if (sessionId === sessionService.localSessionId && command.type === 'SYNC') {
         liveStateRepository.save(command);
       }
 
       // Fazer broadcast do comando para o overlay
-      io.emit('hud:update', command);
+      io.to(sessionService.roomName(sessionId)).emit('hud:update', command);
     });
 
     // --- Veto Events ---

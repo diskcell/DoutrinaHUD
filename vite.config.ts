@@ -7,8 +7,7 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '');
 
   return {
-    // ESSENCIAL para GitHub Pages
-    base: '/DoutrinaHUD/',
+    base: env.VITE_PUBLIC_BASE || './',
 
     plugins: [
       react(),
