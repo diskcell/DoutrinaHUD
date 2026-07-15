@@ -8,43 +8,32 @@ interface PlayerWithMeta extends Player {
   created_at: string;
 }
 
-const MOCK_PLAYERS: PlayerWithMeta[] = [
-  {
-    id: 1,
-    team_id: '',
-    nickname: 'FalleN',
-    real_name: 'Gabriel Toledo',
-    avatar: '',
-    country: 'Brasil',
-    role: 'IGL',
-    steam_link: 'https://steamcommunity.com/id/fallen',
-    faceit_link: 'https://faceit.com/en/players/FalleN',
-    status: 'active',
-    created_at: new Date().toISOString()
-  },
-  {
-    id: 2,
-    team_id: '',
-    nickname: 'KSCERATO',
-    real_name: 'Kaike Cerato',
-    avatar: '',
-    country: 'Brasil',
-    role: 'Lurker',
-    steam_link: 'https://steamcommunity.com/id/kscerato',
-    faceit_link: 'https://faceit.com/en/players/KSCERATO',
-    status: 'active',
-    created_at: new Date().toISOString()
-  }
-];
-
 export function Players() {
-  const [players, setPlayers] = useState<PlayerWithMeta[]>(MOCK_PLAYERS);
+  const [players, setPlayers] = useState<PlayerWithMeta[]>([]);
   const [teams, setTeams] = useState<any[]>([]);
   const [search, setSearch] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingPlayer, setEditingPlayer] = useState<PlayerWithMeta | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const fetchPlayers = async () => {
+    try {
+      setIsLoading(true);
+      const res = await fetch('/api/players');
+      if (res.ok) {
+        const data = await res.json();
+        setPlayers(data);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
+    fetchPlayers();
+    
     // Fetch real teams to relate to players visually
     fetch('/api/teams')
       .then(res => res.json())
@@ -54,9 +43,14 @@ export function Players() {
       .catch(console.error);
   }, []);
 
-  const handleDelete = (id: number) => {
+  const handleDelete = async (id: number) => {
     if (!confirm('Você tem certeza que deseja deletar este jogador?')) return;
-    setPlayers(prev => prev.filter(p => p.id !== id));
+    try {
+      const res = await fetch(`/api/players/${id}`, { method: 'DELETE' });
+      if (res.ok) fetchPlayers();
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const handleEdit = (player: PlayerWithMeta) => {
@@ -69,12 +63,10 @@ export function Players() {
     setIsModalOpen(true);
   };
 
-  const handleSave = (playerData: Player) => {
-    if (playerData.id) {
-       setPlayers(prev => prev.map(p => p.id === playerData.id ? { ...p, ...playerData } as PlayerWithMeta : p));
-    } else {
-       setPlayers(prev => [{ ...playerData, id: Date.now(), created_at: new Date().toISOString() } as PlayerWithMeta, ...prev]);
-    }
+  const handleSave = () => {
+    fetchPlayers();
+    setIsModalOpen(false);
+    setEditingPlayer(null);
   };
 
   const getTeamName = (teamId: number | '') => {
@@ -137,9 +129,9 @@ export function Players() {
                 <div className="p-5 flex-1 hover:bg-neutral-800/20 transition-colors">
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-4 w-full">
-                      <div className="w-16 h-16 rounded-full bg-neutral-950 flex flex-col items-center justify-center p-1 shrink-0 border border-neutral-800 shadow-inner overflow-hidden relative">
+                      <div className="w-16 h-16 rounded-lg bg-neutral-950 flex flex-col items-center justify-center p-1 shrink-0 border border-neutral-800 shadow-inner overflow-hidden relative">
                         {player.avatar ? (
-                          <img src={player.avatar} alt={player.nickname} className="w-full h-full rounded-full object-cover" />
+                          <img src={player.avatar} alt={player.nickname} className="w-full h-full object-cover" onError={(e) => (e.currentTarget.style.display = 'none')} />
                         ) : (
                           <User className="w-8 h-8 text-neutral-700" />
                         )}

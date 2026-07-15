@@ -1,27 +1,5 @@
-import { Shield, ShieldCheck, Bomb, Scissors } from 'lucide-react';
 import { cn } from '../AdminLayout';
-
-export function formatWeaponName(name: string) {
-  if (!name) return '';
-  const clean = name.replace('weapon_', '');
-  const map: Record<string, string> = {
-    'm4a1_silencer': 'M4A1-S',
-    'm4a1': 'M4A4',
-    'ak47': 'AK-47',
-    'awp': 'AWP',
-    'deagle': 'Desert Eagle',
-    'usp_silencer': 'USP-S',
-    'glock': 'Glock-18',
-    'incgrenade': 'Incendiary',
-    'molotov': 'Molotov',
-    'smokegrenade': 'Smoke',
-    'flashbang': 'Flashbang',
-    'hegrenade': 'HE Grenade',
-    'decoy': 'Decoy',
-    'c4': 'C4'
-  };
-  return map[clean] || clean.toUpperCase();
-}
+import { getWeaponIcon, formatWeaponName } from './PlayerCard';
 
 export function PlayerPanel({ player, isRightSide, isObserved, isAutoMode }: any) {
   const p = player;
@@ -35,8 +13,8 @@ export function PlayerPanel({ player, isRightSide, isObserved, isAutoMode }: any
   
   const isDead = health <= 0;
   const isCT = p.team === 'CT';
-  const teamColorClass = isCT ? 'bg-blue-600' : 'bg-yellow-500';
-  const accentBorderClass = isCT ? 'border-blue-500' : 'border-yellow-500';
+  const teamColorClass = isCT ? 'bg-blue-600' : 'bg-orange-600';
+  const accentBorderClass = isCT ? 'border-blue-500' : 'border-orange-500';
   
   // Weapons
   const weapons = Object.values<{name: string, type: string, state: string}>(p.weapons || {});
@@ -46,11 +24,11 @@ export function PlayerPanel({ player, isRightSide, isObserved, isAutoMode }: any
   const c4 = weapons.find(w => w.type === 'C4' || w.name === 'weapon_c4');
   
   const activeWeapon = weapons.find(w => w.state === 'active');
-  const showWeapon = mainWeapon || pistol;
+  const showWeapon = mainWeapon || pistol || weapons.find(w => w.type === 'Knife');
 
   return (
     <div className={cn(
-      "relative w-[360px] h-[68px] overflow-hidden transition-all duration-300 backdrop-blur-xl flex items-center border border-white/10 shadow-2xl", 
+      "relative w-[400px] h-[80px] overflow-hidden transition-all duration-300 backdrop-blur-xl flex items-center border border-white/10 shadow-2xl", 
       isDead ? 'opacity-50 grayscale' : '', 
       isObserved && !isDead ? 'scale-[1.03] z-10 shadow-[0_0_30px_rgba(255,255,255,0.15)] bg-neutral-800/90' : 'bg-neutral-950/80',
       isRightSide ? "flex-row-reverse rounded-l-xl" : "flex-row rounded-r-xl"
@@ -82,9 +60,27 @@ export function PlayerPanel({ player, isRightSide, isObserved, isAutoMode }: any
              <span className={cn("font-black tracking-wider uppercase truncate", isObserved && !isDead ? "text-white text-xl" : "text-gray-100 text-lg")}>
                {p.name}
              </span>
-             {c4 && <Bomb className="w-4 h-4 text-red-500 animate-pulse drop-shadow-[0_0_5px_red] shrink-0" />}
-             {defuseKit && <Scissors className="w-4 h-4 text-blue-400 drop-shadow-[0_0_5px_blue] shrink-0" />}
-             {helmet ? <ShieldCheck className="w-4 h-4 text-gray-400 shrink-0" /> : armor > 0 ? <Shield className="w-4 h-4 text-gray-400 shrink-0" /> : null}
+             {c4 && (
+               <img 
+                 src="/icons/cs2/c4.svg" 
+                 className="w-5 h-5 animate-pulse drop-shadow-[0_0_5px_rgba(239,68,68,0.5)]" 
+                 onError={(e) => (e.currentTarget.style.display = 'none')}
+               />
+             )}
+             {defuseKit && (
+               <img 
+                 src="/icons/cs2/defuser.svg" 
+                 className="w-5 h-5 brightness-0 invert opacity-80" 
+                 onError={(e) => (e.currentTarget.style.display = 'none')}
+               />
+             )}
+             {armor > 0 && (
+               <img 
+                 src={helmet ? "/icons/cs2/armor_helmet.svg" : "/icons/cs2/armor.svg"} 
+                 className="w-4 h-4 brightness-0 invert opacity-40" 
+                 onError={(e) => (e.currentTarget.style.display = 'none')}
+               />
+             )}
           </div>
           <div className={cn("flex items-center gap-2 text-[11px] font-bold tracking-widest uppercase truncate mt-0.5", isRightSide ? "flex-row-reverse" : "flex-row")}>
             <span className={cn("w-10 tabular-nums", health <= 20 && !isDead ? 'text-red-400 drop-shadow-[0_0_5px_red]' : 'text-white', isRightSide ? 'text-right' : 'text-left')}>{health}</span>
@@ -97,19 +93,26 @@ export function PlayerPanel({ player, isRightSide, isObserved, isAutoMode }: any
 
         {/* Weapons Column */}
         <div className={cn("flex flex-col justify-end shrink-0 max-w-[120px]", isRightSide ? "items-start ml-2" : "items-end mr-2")}>
-          <span className={cn("text-[11px] font-black tracking-widest uppercase truncate w-full mb-1", 
-              isRightSide ? "text-left" : "text-right",
-              activeWeapon?.name === showWeapon?.name ? 'text-white drop-shadow-md' : 'text-gray-500')}>
-             {formatWeaponName(showWeapon?.name)}
-          </span>
+          <div className="flex items-center gap-2 mb-1">
+            {showWeapon && (
+              <img 
+                src={getWeaponIcon(showWeapon.name)} 
+                className={cn(
+                  "h-5 w-auto object-contain brightness-0 invert",
+                  activeWeapon?.name === showWeapon.name ? 'opacity-100' : 'opacity-30'
+                )} 
+                onError={(e) => (e.currentTarget.style.display = 'none')}
+              />
+            )}
+          </div>
           <div className={cn("flex items-center gap-1.5", isRightSide ? "flex-row-reverse" : "flex-row")}>
             {grenades.map((g, i) => (
-               <div key={i} className={cn("w-2 h-3 rounded-sm shadow-sm opacity-90", 
-                 g.name.includes('smoke') ? 'bg-gray-400' : 
-                 g.name.includes('flash') ? 'bg-white' : 
-                 g.name.includes('molotov') || g.name.includes('inc') ? 'bg-orange-500' : 
-                 g.name.includes('hegrenade') ? 'bg-green-600' : 'bg-gray-600'
-               )} />
+               <img 
+                 key={i} 
+                 src={getWeaponIcon(g.name)} 
+                 className="w-3 h-4 brightness-0 invert opacity-60 object-contain"
+                 onError={(e) => (e.currentTarget.style.display = 'none')}
+               />
             ))}
           </div>
         </div>

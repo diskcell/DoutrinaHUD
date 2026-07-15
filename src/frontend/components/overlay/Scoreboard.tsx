@@ -5,16 +5,34 @@ import { SeriesStrip } from './SeriesStrip';
 export function Scoreboard({ match, timerDisplay, timerPhase, round, autoMode, gsiState }: any) {
   const scoreHome = match.scoreHome || 0;
   const scoreAway = match.scoreAway || 0;
+  const scoreSeriesHome = match.scoreSeriesHome || 0;
+  const scoreSeriesAway = match.scoreSeriesAway || 0;
+  
   const teamHome = match.teamHome || { name: 'TEAM A', tag: 'TMA', logo: '' };
   const teamAway = match.teamAway || { name: 'TEAM B', tag: 'TMB', logo: '' };
   const format = match.format || 'BO3';
-  const stage = match.stage || 'Live Match';
+  const translateStage = (s: string) => {
+    const map: Record<string, string> = {
+      'Live Match': 'Partida ao Vivo',
+      'Groups': 'Fase de Grupos',
+      'Knockout': 'Mata-mata',
+      'Playoffs': 'Mata-mata',
+      'Mata-mata': 'Mata-mata',
+      'Quarterfinals': 'Quartas de Final',
+      'Semifinal': 'Semifinal',
+      'Grand Final': 'Grande Final',
+      'Final': 'Final'
+    };
+    return map[s] || s;
+  };
+  
+  const stage = translateStage(match.stage || 'Live Match');
   
   const sideHome = match.sideHome || 'CT';
   const leftIsCT = sideHome === 'CT';
 
   const formatRoundCount = autoMode && gsiState?.map?.round ? gsiState.map.round + 1 : 1;
-  const seriesMapIndex = scoreHome + scoreAway + 1;
+  const seriesMapIndex = scoreSeriesHome + scoreSeriesAway + 1;
 
   return (
     <motion.div 
@@ -45,7 +63,12 @@ export function Scoreboard({ match, timerDisplay, timerPhase, round, autoMode, g
           leftIsCT ? "flex-row-reverse" : "flex-row"
         )}>
           {teamHome.logo && (
-            <img src={teamHome.logo} alt={teamHome.name} className="w-12 h-12 object-contain drop-shadow-2xl z-10" />
+            <img 
+              src={teamHome.logo} 
+              alt={teamHome.name} 
+              className="w-12 h-12 object-contain drop-shadow-2xl z-10" 
+              onError={(e) => (e.currentTarget.style.display = 'none')}
+            />
           )}
           <span className={cn(
             "flex-1 text-2xl font-black uppercase tracking-tighter z-10 truncate text-white drop-shadow-md px-4",
@@ -70,12 +93,22 @@ export function Scoreboard({ match, timerDisplay, timerPhase, round, autoMode, g
             <motion.div
               animate={{ backgroundColor: ['rgba(185,28,28,0.8)', 'rgba(220,38,38,1)', 'rgba(185,28,28,0.8)'] }}
               transition={{ repeat: Infinity, duration: 0.8 }}
-              className="absolute inset-0 flex items-center justify-center"
+              className="absolute inset-0 flex items-center justify-center gap-2"
             >
+              <img 
+                src="/icons/cs2/c4.svg" 
+                className="w-8 h-8 animate-pulse" 
+                onError={(e) => (e.currentTarget.style.display = 'none')}
+              />
               <span className="text-2xl font-black text-white tracking-widest animate-pulse">BOMB</span>
             </motion.div>
           ) : timerPhase === 'defuse' ? (
-            <div className="absolute inset-0 bg-blue-600 flex items-center justify-center">
+            <div className="absolute inset-0 bg-blue-600 flex items-center justify-center gap-2">
+              <img 
+                src="/icons/cs2/defuser.svg" 
+                className="w-8 h-8 brightness-0 invert" 
+                onError={(e) => (e.currentTarget.style.display = 'none')}
+              />
               <span className="text-3xl font-black text-white tabular-nums">{timerDisplay}</span>
             </div>
           ) : (
@@ -87,11 +120,11 @@ export function Scoreboard({ match, timerDisplay, timerPhase, round, autoMode, g
                 {timerDisplay}
               </span>
               <div className="flex items-center gap-2 mt-1">
-                <div className="h-[1px] w-4 bg-white/20" />
-                <span className="text-[10px] font-black text-white/60 uppercase tracking-widest">
-                  R{formatRoundCount}
+                <div className="h-[1px] w-2 bg-white/20" />
+                <span className="text-[10px] font-black text-white/60 uppercase tracking-widest whitespace-nowrap">
+                  RODADA {formatRoundCount}
                 </span>
-                <div className="h-[1px] w-4 bg-white/20" />
+                <div className="h-[1px] w-2 bg-white/20" />
               </div>
             </>
           )}
@@ -119,14 +152,19 @@ export function Scoreboard({ match, timerDisplay, timerPhase, round, autoMode, g
             {teamAway.name}
           </span>
           {teamAway.logo && (
-            <img src={teamAway.logo} alt={teamAway.name} className="w-12 h-12 object-contain drop-shadow-2xl z-10" />
+            <img 
+              src={teamAway.logo} 
+              alt={teamAway.name} 
+              className="w-12 h-12 object-contain drop-shadow-2xl z-10" 
+              onError={(e) => (e.currentTarget.style.display = 'none')}
+            />
           )}
         </div>
       </div>
       
       {/* Series Indicator (BO format) */}
       <div className="mt-1 bg-neutral-950/60 backdrop-blur-md px-4 py-0.5 rounded-b-sm border-x border-b border-white/5">
-        <SeriesStrip format={format} mapIndex={seriesMapIndex} scoreHome={match.scoreHome} scoreAway={match.scoreAway} />
+        <SeriesStrip format={format} mapIndex={seriesMapIndex} scoreHome={scoreSeriesHome} scoreAway={scoreSeriesAway} />
       </div>
     </motion.div>
   );

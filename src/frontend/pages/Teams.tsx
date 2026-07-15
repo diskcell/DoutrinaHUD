@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, Plus, MapPin, Edit2, Trash2, Users, ShieldAlert } from 'lucide-react';
+import { Search, Plus, MapPin, Edit2, Trash2, Users, ShieldAlert, DownloadCloud } from 'lucide-react';
 import { cn } from '../components/AdminLayout';
 import { TeamFormModal, Team } from '../components/TeamFormModal';
 
@@ -14,6 +14,7 @@ export function Teams() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTeam, setEditingTeam] = useState<TeamWithMeta | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [importingTeamId, setImportingTeamId] = useState<number | null>(null);
 
   const fetchTeams = async () => {
     try {
@@ -52,6 +53,48 @@ export function Teams() {
   const handleCreate = () => {
     setEditingTeam(null);
     setIsModalOpen(true);
+  };
+
+  const handleImportHltv = async (team: TeamWithMeta) => {
+    const hltvUrl =
+      team.hltv_url ||
+      prompt('Cole a URL do time no HLTV:', `https://www.hltv.org/team/`);
+
+    if (!hltvUrl) return;
+
+    try {
+      setImportingTeamId(team.id);
+
+      const res = await fetch('/api/hltv/import-team', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          teamId: team.id,
+          hltvUrl,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        alert(data.error || 'Erro ao importar jogadores do HLTV.');
+        return;
+      }
+
+      const withoutAvatar = data.players.filter((player: any) => !player.avatar).length;
+      alert(
+        `HLTV importado: ${data.players.length} jogadores processados.` +
+          (withoutAvatar > 0
+            ? `\n${withoutAvatar} jogador(es) vieram sem foto por bloqueio/ausencia de imagem.`
+            : '')
+      );
+      fetchTeams();
+    } catch (error) {
+      console.error(error);
+      alert('Erro de rede ao importar jogadores do HLTV.');
+    } finally {
+      setImportingTeamId(null);
+    }
   };
 
   const filteredTeams = teams.filter(t => 
@@ -113,7 +156,7 @@ export function Teams() {
                     <div className="flex items-center gap-4 w-full">
                       <div className="w-16 h-16 rounded-xl bg-neutral-950 flex flex-col items-center justify-center p-2.5 shrink-0 border border-neutral-800 shadow-inner">
                         {team.logo ? (
-                          <img src={team.logo} alt={team.name} className="w-full h-full object-contain drop-shadow-md" />
+                          <img src={team.logo} alt={team.name} className="w-full h-full object-contain drop-shadow-md" onError={(e) => (e.currentTarget.style.display = 'none')} />
                         ) : (
                           <ShieldAlert className="w-8 h-8 text-neutral-700" />
                         )}
@@ -153,6 +196,14 @@ export function Teams() {
                 <div className="px-4 py-2.5 bg-neutral-950 border-t border-neutral-800 flex items-center justify-between opacity-0 group-hover:opacity-100 transition-opacity">
                   <span className="text-xs text-neutral-600 font-mono">ID: {team.id}</span>
                   <div className="flex items-center gap-1">
+                    <button 
+                      onClick={() => handleImportHltv(team)}
+                      disabled={importingTeamId === team.id}
+                      className="px-3 py-1.5 text-xs font-semibold text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 rounded flex items-center gap-1.5 transition-colors disabled:opacity-50"
+                    >
+                      <DownloadCloud className="w-3.5 h-3.5" />
+                      {importingTeamId === team.id ? 'Importando...' : 'HLTV'}
+                    </button>
                     <button 
                       onClick={() => handleEdit(team)}
                       className="px-3 py-1.5 text-xs font-semibold text-neutral-300 hover:text-white hover:bg-neutral-800 rounded flex items-center gap-1.5 transition-colors"

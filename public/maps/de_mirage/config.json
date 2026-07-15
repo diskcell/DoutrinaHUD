@@ -1,0 +1,21 @@
+{
+  "map": "de_mirage",
+  "image": "radar.png",
+  "pos_x": -3230,
+  "pos_y": 1713,
+  "scale": 5.0,
+  "rotate": 0,
+  "zoom": 0,
+  "inset_left": 0.135,
+  "inset_top": 0.08,
+  "inset_right": 0.105,
+  "inset_bottom": 0.08,
+  "spawns": {
+    "ct": { "x": 0.28, "y": 0.70 },
+    "t": { "x": 0.87, "y": 0.36 }
+  },
+  "bombsites": {
+    "A": { "x": 0.54, "y": 0.76 },
+    "B": { "x": 0.23, "y": 0.28 }
+  }
+}

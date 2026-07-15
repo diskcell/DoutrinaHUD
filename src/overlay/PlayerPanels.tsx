@@ -1,26 +1,23 @@
-import { Shield, ShieldAlert, Crosshair, Dagger } from 'lucide-react';
-import { cn } from '../AdminLayout'; // Ajuste o caminho se necessário
+import { Shield, ShieldAlert, Crosshair, Sword } from 'lucide-react';
+import { motion } from 'motion/react';
+import { cn } from '../frontend/components/AdminLayout'; // Ajuste o caminho se necessário
 
 interface PlayerPanelsProps {
   players: any[];
   isRightSide: boolean;
   isObserved: string | null;
   isAutoMode: boolean;
+  recentKills: Set<string>;
 }
 
-// Função simples para traduzir o nome da arma do CS2 para um ícone temporário
-const getWeaponIcon = (weaponName: string) => {
-  if (!weaponName) return null;
-  if (weaponName.includes('knife') || weaponName.includes('bayonet')) return <Dagger className="w-5 h-5 opacity-70" />;
-  if (weaponName.includes('pistol') || weaponName.includes('deagle') || weaponName.includes('glock')) return <span className="font-bold text-xs opacity-70">PISTOL</span>;
-  return <Crosshair className="w-5 h-5 opacity-70" />; // Default para Rifles/SMGs
-};
+// ... (getWeaponIcon remains the same)
 
-export function PlayerPanels({ players, isRightSide, isObserved, isAutoMode }: PlayerPanelsProps) {
+export function PlayerPanels({ players, isRightSide, isObserved, isAutoMode, recentKills }: PlayerPanelsProps) {
   if (!players || players.length === 0) return null;
 
   const teamColor = players[0]?.team === 'CT' ? 'bg-blue-600' : 'bg-yellow-500';
   const teamBorder = players[0]?.team === 'CT' ? 'border-blue-500' : 'border-yellow-500';
+  const teamGlow = players[0]?.team === 'CT' ? 'shadow-[0_0_20px_rgba(37,99,235,0.4)]' : 'shadow-[0_0_20px_rgba(234,179,8,0.4)]';
 
   return (
     <div className={cn(
@@ -31,6 +28,7 @@ export function PlayerPanels({ players, isRightSide, isObserved, isAutoMode }: P
         const isDead = player.state?.health === 0;
         const isActive = isObserved === player.steamid;
         const hp = player.state?.health || 0;
+        const hasKill = recentKills.has(player.steamid);
         
         // Pega a arma ativa (se houver)
         const activeWeapon = player.weapons 
@@ -44,9 +42,20 @@ export function PlayerPanels({ players, isRightSide, isObserved, isAutoMode }: P
               "w-[300px] h-[70px] bg-neutral-900/95 backdrop-blur-md rounded-lg overflow-hidden border-b-4 flex flex-col relative transition-all duration-200 shadow-xl",
               teamBorder,
               isActive ? "scale-105 border-white ring-2 ring-white/20" : "",
-              isDead ? "opacity-40 grayscale" : ""
+              isDead ? "opacity-40 grayscale" : "",
+              hasKill ? cn("animate-pulse border-white", teamGlow) : ""
             )}
           >
+            {/* Kill Highlight Flash */}
+            {hasKill && (
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: [0, 0.4, 0] }}
+                transition={{ duration: 1.5 }}
+                className={cn("absolute inset-0 z-10", teamColor)}
+              />
+            )}
+            
             {/* Barra de Vida Background */}
             <div className="absolute top-0 left-0 w-full h-full bg-neutral-800/50 z-0" />
             

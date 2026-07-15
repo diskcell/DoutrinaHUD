@@ -1,6 +1,6 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useSocket } from '../../context/SocketContext';
-import { LayoutDashboard, Users, Trophy, Radio, Settings, ShieldAlert } from 'lucide-react';
+import { LayoutDashboard, Users, Trophy, Radio, Settings, ShieldAlert, Layers } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -18,6 +18,7 @@ export function AdminLayout() {
     { name: 'Times', icon: Users, path: '/admin/teams' },
     { name: 'Jogadores', icon: Users, path: '/admin/players' },
     { name: 'Live Control', icon: Radio, path: '/admin/live' },
+    { name: 'Overlays', icon: Layers, path: '/admin/overlays' },
     { name: 'Configurações', icon: Settings, path: '/admin/settings' },
   ];
 

@@ -1,4 +1,4 @@
-import { cn } from '../../components/AdminLayout'; // Ajuste o caminho do 'cn' se necessário
+import { cn } from '../frontend/components/AdminLayout'; // Ajuste o caminho do 'cn' se necessário
 
 interface ScoreboardProps {
   match: any;

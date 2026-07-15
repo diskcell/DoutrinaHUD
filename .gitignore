@@ -6,3 +6,11 @@ coverage/
 *.log
 .env*
 !.env.example
+database/*.db
+database/*.db-*
+public/uploads/
+backups/
+data/
+*.7z
+test
+test.txt

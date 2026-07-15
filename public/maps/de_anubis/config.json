@@ -1,0 +1,21 @@
+{
+  "map": "de_anubis",
+  "image": "radar.png",
+  "pos_x": -2796,
+  "pos_y": 3328,
+  "scale": 5.22,
+  "rotate": 0,
+  "zoom": 0,
+  "inset_left": 0,
+  "inset_top": 0,
+  "inset_right": 0,
+  "inset_bottom": 0,
+  "spawns": {
+    "ct": { "x": 0.61, "y": 0.22 },
+    "t": { "x": 0.58, "y": 0.93 }
+  },
+  "bombsites": {
+    "A": null,
+    "B": null
+  }
+}

@@ -1,20 +1,166 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# DoutrinaHUD — Contexto para o Codex
 
-# Run and deploy your AI Studio app
+## Projeto
 
-This contains everything you need to run your app locally.
+DoutrinaHUD é uma HUD/overlay profissional para transmissões de CS2.
 
-View your app in AI Studio: https://ai.studio/apps/34046612-4ef4-41aa-8cfe-700731c3fdca
+O projeto usa:
+- React + TypeScript no frontend
+- Vite
+- Node/Express no backend
+- Socket.io para comunicação em tempo real
+- CS2 Game State Integration no endpoint `/gsi`
+- SQLite/better-sqlite3 para dados locais
+- ngrok para expor localmente quando necessário
 
-## Run Locally
+Rotas principais:
+- `/#/overlay` — overlay principal da partida
+- `/#/veto` — overlay de veto de mapas
+- `/#/captain-veto/:matchId/:teamToken` — tela dos capitães
+- `/#/admin/live` — painel de controle da live
 
-**Prerequisites:**  Node.js
+## Regras importantes
 
+Nunca quebrar:
+- GSI
+- Socket.io
+- LiveControl
+- overlay principal
+- radar
+- player panels
+- economy panels
+- bomb HUD
+- clutch HUD
+- MVP/round end HUD
+- veto system
+- Steam avatar fallback
+- GitHub Pages/ngrok workflow
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+Não mexer em `server.ts` sem necessidade clara.
+
+Sempre fazer mudanças pequenas, focadas e seguras.
+
+Quando alterar lógica complexa, explicar quais arquivos foram alterados.
+
+## GSI
+
+O CS2 envia dados para:
+
+`http://127.0.0.1:3000/gsi`
+
+A CFG precisa conter dados de:
+- map
+- round
+- player
+- allplayers
+- phase_countdowns
+- bomb
+- grenades/allgrenades
+
+## Radar
+
+O radar usa:
+- `worldToRadar`
+- configs por mapa
+- `RadarMinimap.tsx`
+- `RadarPlayerIcon.tsx`
+- `RadarBombIcon.tsx`
+- `RadarGrenadeLayer.tsx`
+- `RadarGrenadeIcon.tsx`
+
+Não criar outro sistema de coordenadas.
+Sempre usar `worldToRadar`.
+
+## Sistema de granadas
+
+Arquivos principais:
+- `src/frontend/lib/gsi/parseGrenades.ts`
+- `src/frontend/lib/gsi/grenadeTracker.ts`
+- `src/frontend/components/overlay/RadarGrenadeLayer.tsx`
+- `src/frontend/components/overlay/RadarGrenadeIcon.tsx`
+- `src/frontend/components/overlay/RadarMinimap.tsx`
+
+Objetivo:
+- granadas voando devem mostrar ícone + trajetória
+- smoke deve virar círculo/fumaça no radar quando ativada
+- molotov deve virar fogo no radar somente quando explodir/ativar
+- HE deve fazer pequena explosão e sumir rápido
+- flash deve piscar/estourar e sumir rápido
+- decoy deve pulsar por tempo limitado
+- nenhuma utilitária pode ficar infinita no radar
+
+Tempos aproximados CS2:
+- Smoke: 20s
+- Molotov/incendiary: 7s
+- Decoy: 15s
+- HE: explosão rápida, menos de 1s
+- Flash: efeito visual rápido no radar, menos de 1s
+
+Problemas conhecidos recentes:
+- HE e flash estavam explodindo perto do jogador antes de seguir trajetória
+- Molotov estava virando fogo enquanto ainda estava voando
+- Molotov/flash/HE às vezes ficavam presas infinitamente no radar em demo/replay
+
+Regra correta:
+- enquanto a granada existe no GSI e está se movendo, renderizar como projétil
+- quando sumir do GSI ou estado indicar explosão/ativação, renderizar efeito final
+- efeitos finais devem ter duração limitada e depois sumir
+- limpar granadas ao trocar round/freezetime/warmup/gameover
+- em demo/replay, bloquear IDs/efeitos antigos para não recriar utilitárias infinitas
+
+## Veto de mapas
+
+O sistema de veto já existe.
+
+Formato ativo:
+- BO1 / MD1
+- BO3 / MD3
+
+Map pool ativo:
+- Ancient
+- Anubis
+- Dust2
+- Inferno
+- Mirage
+- Nuke
+- Overpass
+
+BO3:
+1. Time da esquerda bane
+2. Time da direita bane
+3. Time da esquerda escolhe mapa 1
+4. Time da esquerda escolhe lado CT/TR
+5. Time da direita escolhe mapa 2
+6. Time da direita escolhe lado CT/TR
+7. Time da esquerda bane
+8. Time da direita bane
+9. mapa restante é decider
+
+Regra importante:
+Quem escolhe o mapa também escolhe o lado.
+
+## Steam avatar fallback
+
+O projeto tem fallback de avatar da Steam.
+
+Prioridade:
+1. foto cadastrada manualmente no DoutrinaHUD
+2. avatar Steam via backend
+3. placeholder
+
+Nunca sobrescrever foto cadastrada com avatar Steam.
+
+`STEAM_API_KEY` fica no `.env`, nunca no frontend.
+
+## Estilo visual
+
+A HUD deve parecer transmissão profissional de CS2:
+- visual escuro
+- limpo
+- compacto
+- sem poluição
+- sem elementos gigantes no meio da gameplay
+- CT azul/ciano
+- TR amarelo/laranja
+
+Textos visíveis devem ficar em português do Brasil.

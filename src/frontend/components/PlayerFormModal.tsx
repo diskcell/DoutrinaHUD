@@ -18,42 +18,46 @@ export interface Player {
 interface Props {
   isOpen: boolean;
   onClose: () => void;
-  onSaved: (player: Player) => void;
+  onSaved: () => void;
   initialData?: Player | null;
   teams: any[];
 }
 
+const emptyPlayer: Player = {
+  team_id: '',
+  nickname: '',
+  real_name: '',
+  avatar: '',
+  country: '',
+  role: '',
+  steam_link: '',
+  faceit_link: '',
+  status: 'active'
+};
+
+function normalizePlayerFormData(player?: Partial<Player> | null): Player {
+  return {
+    id: player?.id,
+    team_id: player?.team_id ?? '',
+    nickname: player?.nickname || '',
+    real_name: player?.real_name || '',
+    avatar: player?.avatar || '',
+    country: player?.country || '',
+    role: player?.role || '',
+    steam_link: player?.steam_link || '',
+    faceit_link: player?.faceit_link || '',
+    status: player?.status || 'active'
+  };
+}
+
 export function PlayerFormModal({ isOpen, onClose, onSaved, initialData, teams }: Props) {
-  const [formData, setFormData] = useState<Player>({
-    team_id: '',
-    nickname: '',
-    real_name: '',
-    avatar: '',
-    country: '',
-    role: '',
-    steam_link: '',
-    faceit_link: '',
-    status: 'active'
-  });
+  const [formData, setFormData] = useState<Player>(emptyPlayer);
   
+  const [loading, setLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (initialData) {
-      setFormData(initialData);
-    } else {
-      setFormData({
-        team_id: '',
-        nickname: '',
-        real_name: '',
-        avatar: '',
-        country: '',
-        role: '',
-        steam_link: '',
-        faceit_link: '',
-        status: 'active'
-      });
-    }
+    setFormData(normalizePlayerFormData(initialData));
   }, [initialData, isOpen]);
 
   if (!isOpen) return null;
@@ -77,11 +81,33 @@ export function PlayerFormModal({ isOpen, onClose, onSaved, initialData, teams }
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Simulate save operational structure
-    onSaved(formData);
-    onClose();
+    if (loading) return;
+    setLoading(true);
+    try {
+      const isEdit = !!initialData?.id;
+      const url = isEdit ? `/api/players/${initialData.id}` : '/api/players';
+      const method = isEdit ? 'PUT' : 'POST';
+
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
+      });
+
+      if (res.ok) {
+        onSaved();
+        // onClose is handled by onSaved in parent
+      } else {
+        alert('Erro ao salvar jogador.');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Erro de rede.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -108,14 +134,14 @@ export function PlayerFormModal({ isOpen, onClose, onSaved, initialData, teams }
             <div className="flex flex-col items-center gap-3">
               <div 
                 className={cn(
-                  "w-32 h-32 rounded-full flex items-center justify-center border-2 border-dashed bg-neutral-950 overflow-hidden cursor-pointer group relative transition-colors shadow-inner",
+                  "w-32 h-32 rounded-lg flex items-center justify-center border-2 border-dashed bg-neutral-950 overflow-hidden cursor-pointer group relative transition-colors shadow-inner",
                   formData.avatar ? "border-emerald-500/50" : "border-neutral-700 hover:border-emerald-500/50 hover:bg-neutral-900"
                 )}
                 onClick={() => fileInputRef.current?.click()}
               >
                 {formData.avatar ? (
                   <>
-                    <img src={formData.avatar} alt="Avatar" className="w-full h-full object-cover" />
+                    <img src={formData.avatar} alt="Avatar" className="w-full h-full object-cover" onError={(e) => (e.currentTarget.style.display = 'none')} />
                     <div className="absolute inset-0 bg-neutral-900/60 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center transition-opacity">
                       <Upload className="w-6 h-6 text-white mb-1 shadow-sm" />
                     </div>

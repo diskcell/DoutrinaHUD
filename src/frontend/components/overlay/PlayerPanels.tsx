@@ -1,32 +1,47 @@
 import { PlayerCard } from './PlayerCard';
 import { cn } from '../AdminLayout';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 
-export function PlayerPanels({ players, isRightSide, isObserved, isAutoMode }: any) {
+interface PlayerPanelsProps {
+  players: any[];
+  isRightSide?: boolean;
+  isObserved?: string | null;
+  isAutoMode?: boolean;
+}
+
+export function PlayerPanels({ players, isRightSide, isObserved }: PlayerPanelsProps) {
+  if (!players || players.length === 0) return null;
+
   return (
-    <motion.div 
-      initial={{ y: 50, opacity: 0 }}
-      animate={{ y: 0, opacity: 1 }}
-      transition={{ type: 'spring', damping: 25, stiffness: 120 }}
+    <div 
       className={cn(
-        "flex flex-col gap-1.5 absolute bottom-10 z-20", 
-        isRightSide ? "right-10" : "left-10"
+        "flex flex-col gap-1 absolute bottom-8 z-20", 
+        isRightSide ? "right-6" : "left-6"
       )}
     >
-      {players.map((p: any, i: number) => (
-        <motion.div
-          key={p.steamid}
-          initial={{ opacity: 0, x: isRightSide ? 40 : -40 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: i * 0.1, duration: 0.4 }}
-        >
-          <PlayerCard 
-            player={p} 
-            isRightSide={isRightSide} 
-            isObserved={isObserved === p.steamid} 
-          />
-        </motion.div>
-      ))}
-    </motion.div>
+      <AnimatePresence mode="popLayout">
+        {players.map((p, i) => (
+          <motion.div
+            key={p.steamid || i}
+            layout
+            initial={{ opacity: 0, x: isRightSide ? 50 : -50 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            transition={{ 
+              type: 'spring', 
+              damping: 20, 
+              stiffness: 100,
+              delay: i * 0.05 
+            }}
+          >
+            <PlayerCard 
+              player={p} 
+              isRightSide={isRightSide} 
+              isObserved={isObserved === p.steamid} 
+            />
+          </motion.div>
+        ))}
+      </AnimatePresence>
+    </div>
   );
 }

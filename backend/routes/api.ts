@@ -1,7 +1,11 @@
 import { Router } from 'express';
-import { db } from '../../database/index.js';
 import teamsRoutes from './teams.js';
+import playersRoutes from './players.js';
 import gsiRoutes from './gsi.js';
+import steamRoutes from './steam.js';
+import overlaysRoutes from './overlays.js';
+import hltvRoutes from './hltv.js';
+import { getTeams, getPlayers } from '../dataService.js';
 
 const router = Router();
 
@@ -10,18 +14,16 @@ router.get('/health', (req, res) => {
   res.json({ status: 'ok', message: 'DoutrinaHUD API rodando' });
 });
 
-// Resumo / Dashboard Stats (Placeholder)
+// Resumo / Dashboard Stats
 router.get('/stats', (req, res) => {
-// We can use the db to get accurate stats now
   try {
-    const teamsCount = db.prepare('SELECT COUNT(*) as count FROM teams').get() as { count: number };
-    const playersCount = db.prepare('SELECT COUNT(*) as count FROM players').get() as { count: number };
-    const matchesCount = db.prepare('SELECT COUNT(*) as count FROM matches WHERE status = "active"').get() as { count: number };
+    const teams = getTeams();
+    const players = getPlayers();
     
     res.json({
-      teams: teamsCount.count,
-      players: playersCount.count,
-      activeMatches: matchesCount.count
+      teams: teams.length,
+      players: players.length,
+      activeMatches: 0 // Placeholder or implement match logic
     });
   } catch (error) {
     res.json({ teams: 0, players: 0, activeMatches: 0 });
@@ -29,6 +31,10 @@ router.get('/stats', (req, res) => {
 });
 
 router.use('/teams', teamsRoutes);
+router.use('/players', playersRoutes);
 router.use('/gsi', gsiRoutes);
+router.use('/steam', steamRoutes);
+router.use('/overlays', overlaysRoutes);
+router.use('/hltv', hltvRoutes);
 
 export default router;

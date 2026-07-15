@@ -26,7 +26,7 @@ export function SeriesStrip({ format, mapIndex = 1, scoreHome = 0, scoreAway = 0
       </div>
 
       <span className="text-[9px] font-black text-white/40 uppercase tracking-[0.2em]">
-        Best of {totalMaps}
+        Melhor de {totalMaps}
       </span>
 
       {/* Away Map Wins */}

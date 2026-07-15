@@ -1,0 +1,21 @@
+{
+  "map": "de_ancient",
+  "image": "radar.png",
+  "pos_x": -2953,
+  "pos_y": 2164,
+  "scale": 5,
+  "rotate": 0,
+  "zoom": 0,
+  "inset_left": 0,
+  "inset_top": 0,
+  "inset_right": 0,
+  "inset_bottom": 0,
+  "spawns": {
+    "ct": { "x": 0.51, "y": 0.17 },
+    "t": { "x": 0.485, "y": 0.87 }
+  },
+  "bombsites": {
+    "A": { "x": 0.31, "y": 0.25 },
+    "B": { "x": 0.80, "y": 0.40 }
+  }
+}

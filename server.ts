@@ -4,8 +4,8 @@ import path from 'path';
 import { Server as SocketIOServer } from 'socket.io';
 import { createServer as createViteServer } from 'vite';
 
-import { initializeSchema } from './database/index.js';
 import apiRoutes from './backend/routes/api.js';
+import { gsiEmitter } from './backend/socket/gsiEmitter.js';
 import { setupSocket } from './backend/socket/handlers.js';
 
 async function startServer() {
@@ -21,11 +21,30 @@ async function startServer() {
 
   const PORT = 3000;
 
-  // Inicializa banco SQLite
-  initializeSchema();
+  app.set('etag', false);
+
+  app.use((req, res, next) => {
+    if (req.method === 'GET') {
+      res.setHeader(
+        'Cache-Control',
+        'no-store, no-cache, must-revalidate, proxy-revalidate'
+      );
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+      res.setHeader('Surrogate-Control', 'no-store');
+    }
+
+    next();
+  });
 
   // Middleware para receber JSON
-  app.use(express.json());
+  app.use(express.json({ limit: '10mb' }));
+
+  // Servir uploads de forma estática
+  app.use(
+    '/uploads',
+    express.static(path.join(process.cwd(), 'public/uploads'))
+  );
 
   /*
    ============================================================
@@ -42,6 +61,12 @@ async function startServer() {
   app.post('/gsi', async (req, res) => {
     try {
       const gameState = req.body;
+
+      const rawGrenades =
+        gameState.grenades ||
+        gameState.allgrenades ||
+        gameState.allgrenades_map ||
+        null;
 
       const payload = {
         provider: gameState.provider || null,
@@ -91,17 +116,28 @@ async function startServer() {
           countdown: gameState.bomb?.countdown || null,
         },
 
+        // Dados de granadas/utilitários para trajetória no radar
+        grenades: rawGrenades,
+
         auth: gameState.auth || null,
       };
 
+      /*
+       ============================================================
+       DEBUG OPCIONAL
+       ============================================================
+       Descomente esse bloco só para testar se o CS2 está enviando
+       granadas para o servidor.
+
+       if (rawGrenades) {
+         console.log('GRENADES RECEBIDAS:', Object.keys(rawGrenades).length);
+       }
+       ============================================================
+      */
+
       // Envia atualização para overlay e painel
-      io.emit('gsi:update', payload);
 
       // Emissor adicional para integração interna
-      const { gsiEmitter } = await import(
-        './backend/socket/gsiEmitter.js'
-      );
-
       gsiEmitter.emit('gsi:update', payload);
 
       return res.sendStatus(200);
@@ -133,9 +169,29 @@ async function startServer() {
   } else {
     const distPath = path.join(process.cwd(), 'dist');
 
-    app.use(express.static(distPath));
+    app.use(
+      express.static(distPath, {
+        etag: false,
+        lastModified: false,
+        setHeaders: (res) => {
+          res.setHeader(
+            'Cache-Control',
+            'no-store, no-cache, must-revalidate, proxy-revalidate'
+          );
+          res.setHeader('Pragma', 'no-cache');
+          res.setHeader('Expires', '0');
+          res.setHeader('Surrogate-Control', 'no-store');
+        },
+      })
+    );
 
     app.get('*', (req, res) => {
+      res.setHeader(
+        'Cache-Control',
+        'no-store, no-cache, must-revalidate, proxy-revalidate'
+      );
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }
@@ -143,6 +199,7 @@ async function startServer() {
   // Inicializa servidor
   server.listen(PORT, '0.0.0.0', () => {
     console.log(`DoutrinaHUD Server rodando na porta ${PORT}`);
+    console.log(`GSI aguardando em: http://127.0.0.1:${PORT}/gsi`);
   });
 }
 

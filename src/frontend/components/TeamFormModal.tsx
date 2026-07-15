@@ -11,6 +11,7 @@ export interface Team {
   organization: string;
   social_links: string;
   status: string;
+  hltv_url?: string;
 }
 
 interface Props {
@@ -20,27 +21,38 @@ interface Props {
   initialData?: Team | null;
 }
 
+const emptyTeam: Team = {
+  name: '',
+  tag: '',
+  logo: '',
+  country: '',
+  organization: '',
+  social_links: '',
+  status: 'active',
+  hltv_url: ''
+};
+
+function normalizeTeamFormData(team?: Partial<Team> | null): Team {
+  return {
+    id: team?.id,
+    name: team?.name || '',
+    tag: team?.tag || '',
+    logo: team?.logo || '',
+    country: team?.country || '',
+    organization: team?.organization || '',
+    social_links: team?.social_links || '',
+    status: team?.status || 'active',
+    hltv_url: team?.hltv_url || ''
+  };
+}
+
 export function TeamFormModal({ isOpen, onClose, onSaved, initialData }: Props) {
-  const [formData, setFormData] = useState<Team>({
-    name: '',
-    tag: '',
-    logo: '',
-    country: '',
-    organization: '',
-    social_links: '',
-    status: 'active'
-  });
+  const [formData, setFormData] = useState<Team>(emptyTeam);
   const [loading, setLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (initialData) {
-      setFormData(initialData);
-    } else {
-      setFormData({
-        name: '', tag: '', logo: '', country: '', organization: '', social_links: '', status: 'active'
-      });
-    }
+    setFormData(normalizeTeamFormData(initialData));
   }, [initialData, isOpen]);
 
   if (!isOpen) return null;
@@ -126,7 +138,7 @@ export function TeamFormModal({ isOpen, onClose, onSaved, initialData }: Props) 
               >
                 {formData.logo ? (
                   <>
-                    <img src={formData.logo} alt="Logo" className="w-full h-full object-contain p-2" />
+                    <img src={formData.logo} alt="Logo" className="w-full h-full object-contain p-2" onError={(e) => (e.currentTarget.style.display = 'none')} />
                     <div className="absolute inset-0 bg-neutral-900/60 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center transition-opacity">
                       <Upload className="w-6 h-6 text-white mb-1 shadow-sm" />
                       <span className="text-xs text-white font-medium drop-shadow-md">Alterar Logo</span>
@@ -222,6 +234,20 @@ export function TeamFormModal({ isOpen, onClose, onSaved, initialData }: Props) 
                 <option value="inactive">Inativo (Desclassificado/Removido)</option>
               </select>
             </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-neutral-400 uppercase tracking-wider">URL do time no HLTV</label>
+            <input
+              name="hltv_url"
+              value={formData.hltv_url || ''}
+              onChange={handleChange}
+              className="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-4 py-2.5 text-white text-sm placeholder:text-neutral-600 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all font-mono"
+              placeholder="Ex: https://www.hltv.org/team/8297/furia"
+            />
+            <p className="text-[11px] text-neutral-500">
+              Usado para importar jogadores e fotos automaticamente para o banco local.
+            </p>
           </div>
           
           <div className="pt-2"></div>

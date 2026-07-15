@@ -1,0 +1,21 @@
+{
+  "map": "de_overpass",
+  "image": "radar.png",
+  "pos_x": -4831,
+  "pos_y": 1781,
+  "scale": 5.2,
+  "rotate": 0,
+  "zoom": 0,
+  "inset_left": 0,
+  "inset_top": 0,
+  "inset_right": 0,
+  "inset_bottom": 0,
+  "spawns": {
+    "ct": { "x": 0.49, "y": 0.2 },
+    "t": { "x": 0.66, "y": 0.93 }
+  },
+  "bombsites": {
+    "A": { "x": 0.55, "y": 0.23 },
+    "B": { "x": 0.7, "y": 0.31 }
+  }
+}
