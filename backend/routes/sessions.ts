@@ -1,14 +1,16 @@
 import { Router } from 'express';
 import { sessionService } from '../online/sessionService.js';
+import { requireAuth } from '../auth/requireAuth.js';
 
 const router = Router();
 
-router.post('/', (_req, res) => {
-  const session = sessionService.create();
+router.post('/', requireAuth, (req, res) => {
+  const session = sessionService.create(req.authUser!.workspace_id);
 
   return res.status(201).json({
     id: session.id,
     token: session.token,
+    controlToken: session.controlToken,
     createdAt: session.createdAt,
   });
 });

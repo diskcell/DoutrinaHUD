@@ -1,8 +1,10 @@
 import db from '../index.js';
 
 export const playerRepository = {
-  getAll: () => {
-    const players = db.prepare('SELECT * FROM players ORDER BY nickname ASC').all();
+  getAll: (workspaceId?: string) => {
+    const players = workspaceId
+      ? db.prepare('SELECT * FROM players WHERE workspace_id = ? ORDER BY nickname ASC').all(workspaceId)
+      : db.prepare('SELECT * FROM players ORDER BY nickname ASC').all();
     return players.map((p: any) => ({
       ...p,
       avatar: p.avatar_url
@@ -39,6 +41,7 @@ export const playerRepository = {
       hltv_player_id,
       hltv_profile_url,
       avatar_source,
+      workspace_id,
     } = player;
     const stmt = db.prepare(`
       INSERT INTO players (
@@ -53,9 +56,10 @@ export const playerRepository = {
         hltv_player_id,
         hltv_profile_url,
         avatar_source,
+        workspace_id,
         hltv_synced_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     `);
     return stmt.run(
       id,
@@ -68,11 +72,12 @@ export const playerRepository = {
       country,
       hltv_player_id || null,
       hltv_profile_url || null,
-      avatar_source || null
+      avatar_source || null,
+      workspace_id || null
     );
   },
 
-  update: (id: number, player: any) => {
+  update: (id: number, player: any, workspaceId?: string) => {
     const {
       nickname,
       real_name,
@@ -100,7 +105,7 @@ export const playerRepository = {
         avatar_source = COALESCE(?, avatar_source),
         hltv_synced_at = CURRENT_TIMESTAMP,
         updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
+      WHERE id = ? ${workspaceId ? 'AND workspace_id = ?' : ''}
     `);
     return stmt.run(
       nickname,
@@ -113,7 +118,8 @@ export const playerRepository = {
       hltv_player_id || null,
       hltv_profile_url || null,
       avatar_source || null,
-      id
+      id,
+      ...(workspaceId ? [workspaceId] : [])
     );
   },
 
@@ -154,7 +160,9 @@ export const playerRepository = {
     return { id, action: 'created' };
   },
 
-  delete: (id: number) => {
-    return db.prepare('DELETE FROM players WHERE id = ?').run(id);
+  delete: (id: number, workspaceId?: string) => {
+    return workspaceId
+      ? db.prepare('DELETE FROM players WHERE id = ? AND workspace_id = ?').run(id, workspaceId)
+      : db.prepare('DELETE FROM players WHERE id = ?').run(id);
   }
 };

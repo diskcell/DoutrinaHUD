@@ -16,9 +16,8 @@ O Connector local continua disponivel somente como alternativa para operadores q
 2. No Railway, crie um projeto a partir do repositorio.
 3. O `Dockerfile` configura a compilacao e inicia o servidor automaticamente.
 4. Defina `NODE_ENV=production` nas variaveis do servico.
-5. Crie um Volume do Railway montado em `/app/database` para manter os dados SQLite entre reinicios.
-6. Crie outro Volume montado em `/app/public/uploads` para preservar logos e fotos enviadas ou importadas.
-7. Gere um dominio publico do Railway, por exemplo `https://doutrinahud-production.up.railway.app`.
+5. Crie um Volume do Railway montado em `/app/database` para manter os dados SQLite, logos e fotos entre reinicios.
+6. Gere um dominio publico do Railway, por exemplo `https://doutrinahud-production.up.railway.app`.
 
 Abra esse dominio e use o painel remoto. GitHub Pages pode continuar como demonstracao visual, mas nao executa a API, Socket.IO ou banco de dados.
 

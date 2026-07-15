@@ -14,6 +14,7 @@ import { Overlays } from './frontend/pages/Overlays';
 import { CaptainVetoView } from './frontend/pages/CaptainVetoView';
 import { OverlayView } from './overlay/OverlayView';
 import { VetoOverlayView } from './overlay/VetoOverlayView';
+import { AuthGate } from './frontend/pages/AuthGate';
 
 export default function App() {
   return (
@@ -24,7 +25,7 @@ export default function App() {
           <Route path="/" element={<Navigate to="/admin" replace />} />
           
           {/* Rotas de Administração */}
-          <Route path="/admin" element={<AdminLayout />}>
+          <Route path="/admin" element={<AuthGate><AdminLayout /></AuthGate>}>
             <Route index element={<Dashboard />} />
             {/* Placeholders for future routes */}
             <Route path="matches" element={<div className="text-neutral-400">Gerenciamento de Partidas (Em breve)</div>} />

@@ -4,6 +4,7 @@ import path from 'path';
 const DATA_DIR = path.join(process.cwd(), 'data');
 const TEAMS_FILE = path.join(DATA_DIR, 'teams.json');
 const PLAYERS_FILE = path.join(DATA_DIR, 'players.json');
+const UPLOADS_DIR = path.join(process.cwd(), 'database', 'uploads');
 
 const ensureFile = (file: string) => {
   if (!fs.existsSync(file)) {
@@ -41,7 +42,8 @@ export const saveImage = (base64Data: string, prefix: string) => {
     const buffer = Buffer.from(data, 'base64');
     
     const filename = `${prefix}_${Date.now()}.${extension}`;
-    const filePath = path.join(process.cwd(), 'public', 'uploads', filename);
+    fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+    const filePath = path.join(UPLOADS_DIR, filename);
     
     fs.writeFileSync(filePath, buffer);
     return `/uploads/${filename}`;

@@ -3,6 +3,8 @@ import { randomBytes } from 'crypto';
 export interface HudSession {
   id: string;
   token: string | null;
+  controlToken: string | null;
+  workspaceId: string | null;
   createdAt: number;
   updatedAt: number;
   latestGsiData: any;
@@ -24,11 +26,13 @@ function createToken() {
   return randomBytes(24).toString('base64url');
 }
 
-function createRecord(id: string, token: string | null, initialHudState: any = null): HudSession {
+function createRecord(id: string, token: string | null, initialHudState: any = null, workspaceId: string | null = null): HudSession {
   const timestamp = now();
   const session = {
     id,
     token,
+    controlToken: token ? createToken() : null,
+    workspaceId,
     createdAt: timestamp,
     updatedAt: timestamp,
     latestGsiData: null,
@@ -58,14 +62,14 @@ export const sessionService = {
     return createRecord(LOCAL_SESSION_ID, null, initialHudState);
   },
 
-  create() {
+  create(workspaceId: string) {
     let id = createSessionId();
 
     while (sessions.has(id)) {
       id = createSessionId();
     }
 
-    return createRecord(id, createToken());
+    return createRecord(id, createToken(), null, workspaceId);
   },
 
   get(sessionId: string | undefined | null) {
@@ -95,6 +99,11 @@ export const sessionService = {
     if (!session || !session.token || !token) return false;
 
     return session.token === token;
+  },
+
+  verifyControlToken(sessionId: string, token: string | undefined | null) {
+    const session = this.get(sessionId);
+    return Boolean(session && session.controlToken && token && session.controlToken === token);
   },
 
   updateGsi(sessionId: string, data: any) {

@@ -43,6 +43,10 @@ async function startServer() {
 
   // Middleware para receber JSON
   app.use(express.json({ limit: '10mb' }));
+  app.use(
+    '/uploads',
+    express.static(path.join(process.cwd(), 'database', 'uploads'))
+  );
 
   // Servir uploads de forma estática
   app.use(

@@ -25,6 +25,37 @@ function ensureColumn(table: string, column: string, definition: string) {
 export function initDatabase() {
   console.log('[Database] Inicializando tabelas...');
 
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      email TEXT NOT NULL UNIQUE,
+      display_name TEXT NOT NULL,
+      password_hash TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS workspaces (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      owner_id TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS auth_sessions (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      token_hash TEXT NOT NULL UNIQUE,
+      expires_at INTEGER NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `);
+
   // Tabela de Times
   db.exec(`
     CREATE TABLE IF NOT EXISTS teams (
@@ -223,11 +254,16 @@ export function initDatabase() {
   ensureColumn('teams', 'hltv_url', 'TEXT');
   ensureColumn('teams', 'hltv_team_id', 'TEXT');
   ensureColumn('teams', 'hltv_synced_at', 'DATETIME');
+  ensureColumn('teams', 'workspace_id', 'TEXT');
 
   ensureColumn('players', 'hltv_player_id', 'TEXT');
   ensureColumn('players', 'hltv_profile_url', 'TEXT');
   ensureColumn('players', 'avatar_source', 'TEXT');
   ensureColumn('players', 'hltv_synced_at', 'DATETIME');
+  ensureColumn('players', 'workspace_id', 'TEXT');
+
+  db.exec('CREATE INDEX IF NOT EXISTS idx_teams_workspace ON teams(workspace_id)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_players_workspace ON players(workspace_id)');
 
   console.log('[Database] Tabelas prontas.');
 }

@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { playerRepository } from '../database/repositories/playerRepository.js';
 import { teamRepository } from '../database/repositories/teamRepository.js';
+import { requireAuth } from '../auth/requireAuth.js';
 
 const router = Router();
 const HLTV_ORIGIN = 'https://www.hltv.org';
@@ -342,7 +343,7 @@ async function downloadPlayerImage(imageUrl: string, hltvPlayerId: string | null
         ? 'jpg'
         : path.extname(new URL(normalizedImageUrl).pathname).replace('.', '') || 'jpg';
 
-  const uploadsDir = path.join(process.cwd(), 'public', 'uploads', 'players');
+  const uploadsDir = path.join(process.cwd(), 'database', 'uploads', 'players');
   fs.mkdirSync(uploadsDir, { recursive: true });
 
   const fileName = `hltv_${hltvPlayerId || sanitizeFilePart(nickname)}_${sanitizeFilePart(nickname)}.${extension}`;
@@ -354,7 +355,7 @@ async function downloadPlayerImage(imageUrl: string, hltvPlayerId: string | null
   return `/uploads/players/${fileName}`;
 }
 
-router.post('/import-team', async (req, res) => {
+router.post('/import-team', requireAuth, async (req, res) => {
   try {
     const teamId = Number(req.body.teamId);
     const hltvUrl = normalizeHltvUrl(req.body.hltvUrl);
@@ -366,7 +367,7 @@ router.post('/import-team', async (req, res) => {
       });
     }
 
-    const team = teamRepository.getById(teamId);
+    const team = teamRepository.getById(teamId, req.authUser!.workspace_id);
 
     if (!team) {
       return res.status(404).json({ success: false, error: 'Time nao encontrado.' });
@@ -438,7 +439,8 @@ router.post('/import-team', async (req, res) => {
         country: null,
         hltv_player_id: hltvPlayerId,
         hltv_profile_url: hltvProfileUrl,
-        avatar_source: avatar ? 'hltv' : null,
+      avatar_source: avatar ? 'hltv' : null,
+      workspace_id: req.authUser!.workspace_id,
       });
 
       importedPlayers.push({
