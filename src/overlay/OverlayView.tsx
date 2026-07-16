@@ -47,7 +47,7 @@ function getManualTimerStatus(matchStatus: string | undefined) {
 }
 
 export function OverlayView({ variant }: OverlayViewProps) {
-  const { socket, connected } = useSocket();
+  const { socket, connected, sessionId } = useSocket();
   const [selectedVariant, setSelectedVariant] = useState<OverlayVariant>(() => {
     return variant || getOverlayVariantFromModelId(getStoredActiveOverlayId());
   });
@@ -90,7 +90,7 @@ export function OverlayView({ variant }: OverlayViewProps) {
       setSelectedVariant(getOverlayVariantFromModelId(getStoredActiveOverlayId()));
     };
 
-    fetch('/api/overlays/active')
+    fetch(`/api/overlays/active?session=${encodeURIComponent(sessionId)}`)
       .then((res) => (res.ok ? res.json() : null))
       .then((activeModel) => {
         if (!isMounted || !activeModel?.id) return;
@@ -106,7 +106,7 @@ export function OverlayView({ variant }: OverlayViewProps) {
       window.removeEventListener('storage', syncFromStorage);
       window.removeEventListener('doutrinahud:overlay-model-change', syncFromStorage);
     };
-  }, [variant]);
+  }, [variant, sessionId]);
 
   // Fetch Steam profiles when new players appear
   useEffect(() => {

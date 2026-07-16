@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { playerRepository } from '../database/repositories/playerRepository.js';
 import { saveImage } from '../dataService.js';
 import { requireAuth } from '../auth/requireAuth.js';
+import { teamRepository } from '../database/repositories/teamRepository.js';
 
 const router = Router();
 
@@ -14,6 +15,9 @@ router.get('/', (req, res) => {
 
 // Create player
 router.post('/', (req, res) => {
+  if (req.body.team_id && !teamRepository.getById(Number(req.body.team_id), req.authUser!.workspace_id)) {
+    return res.status(400).json({ error: 'O time selecionado nao pertence ao seu workspace.' });
+  }
   const newPlayer = {
     ...req.body, workspace_id: req.authUser!.workspace_id,
     id: Date.now(),
@@ -26,6 +30,9 @@ router.post('/', (req, res) => {
 // Update player
 router.put('/:id', (req, res) => {
   const { id } = req.params;
+  if (req.body.team_id && !teamRepository.getById(Number(req.body.team_id), req.authUser!.workspace_id)) {
+    return res.status(400).json({ error: 'O time selecionado nao pertence ao seu workspace.' });
+  }
   const avatar = req.body.avatar && req.body.avatar.startsWith('data:image') 
     ? saveImage(req.body.avatar, 'player') 
     : req.body.avatar;

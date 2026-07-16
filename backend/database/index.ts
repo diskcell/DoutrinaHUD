@@ -56,6 +56,22 @@ export function initDatabase() {
     )
   `);
 
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS online_sessions (
+      id TEXT PRIMARY KEY,
+      workspace_id TEXT NOT NULL,
+      gsi_token_hash TEXT NOT NULL,
+      control_token_hash TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      expires_at INTEGER NOT NULL
+    )
+  `);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_online_sessions_workspace ON online_sessions(workspace_id)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_online_sessions_expires ON online_sessions(expires_at)');
+  ensureColumn('online_sessions', 'hud_state_json', 'TEXT');
+  db.exec(`CREATE TABLE IF NOT EXISTS workspace_overlay_settings (workspace_id TEXT PRIMARY KEY, active_model_id TEXT NOT NULL, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP)`);
+
   // Tabela de Times
   db.exec(`
     CREATE TABLE IF NOT EXISTS teams (

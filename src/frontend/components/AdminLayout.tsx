@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useSocket } from '../../context/SocketContext';
 import { LayoutDashboard, Users, Trophy, Radio, Settings, ShieldAlert, Layers, LogOut } from 'lucide-react';
@@ -11,6 +12,7 @@ export function cn(...inputs: ClassValue[]) {
 export function AdminLayout() {
   const { connected, sessionId } = useSocket();
   const location = useLocation();
+  const [account, setAccount] = useState<{ displayName: string; workspaceName: string } | null>(null);
 
   const menu = [
     { name: 'Dashboard', icon: LayoutDashboard, path: '/admin' },
@@ -26,6 +28,13 @@ export function AdminLayout() {
     await fetch('/api/auth/logout', { method: 'POST' });
     window.location.reload();
   };
+
+  useEffect(() => {
+    fetch('/api/auth/me')
+      .then((response) => response.json())
+      .then((data) => setAccount(data.user || null))
+      .catch(() => setAccount(null));
+  }, []);
 
   return (
     <div className="flex h-screen bg-neutral-900 text-white font-sans">
@@ -60,6 +69,12 @@ export function AdminLayout() {
         </nav>
 
         <div className="p-4 border-t border-neutral-800">
+          {account && (
+            <div className="mb-4 px-2 min-w-0">
+              <p className="text-xs font-semibold text-neutral-200 truncate">{account.displayName}</p>
+              <p className="text-[10px] text-neutral-500 uppercase tracking-wide truncate">{account.workspaceName}</p>
+            </div>
+          )}
           <div className="flex items-center gap-3 text-sm px-2">
             <div className={cn("w-2 h-2 rounded-full", connected ? "bg-emerald-500" : "bg-red-500")} />
             <span className="text-neutral-400">

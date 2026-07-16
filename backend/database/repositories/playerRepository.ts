@@ -123,22 +123,27 @@ export const playerRepository = {
     );
   },
 
-  findByHltvPlayerId: (hltvPlayerId: string) => {
-    return db.prepare('SELECT * FROM players WHERE hltv_player_id = ?').get(hltvPlayerId);
+  findByHltvPlayerId: (hltvPlayerId: string, workspaceId?: string) => {
+    return workspaceId
+      ? db.prepare('SELECT * FROM players WHERE hltv_player_id = ? AND workspace_id = ?').get(hltvPlayerId, workspaceId)
+      : db.prepare('SELECT * FROM players WHERE hltv_player_id = ?').get(hltvPlayerId);
   },
 
-  findByNicknameAndTeam: (nickname: string, teamId: number) => {
-    return db.prepare(`
+  findByNicknameAndTeam: (nickname: string, teamId: number, workspaceId?: string) => {
+    const statement = `
       SELECT * FROM players
-      WHERE lower(nickname) = lower(?) AND team_id = ?
+      WHERE lower(nickname) = lower(?) AND team_id = ? ${workspaceId ? 'AND workspace_id = ?' : ''}
       LIMIT 1
-    `).get(nickname, teamId);
+    `;
+    return workspaceId
+      ? db.prepare(statement).get(nickname, teamId, workspaceId)
+      : db.prepare(statement).get(nickname, teamId);
   },
 
   upsertFromHltv: (player: any) => {
     const existing =
-      (player.hltv_player_id && playerRepository.findByHltvPlayerId(player.hltv_player_id)) ||
-      playerRepository.findByNicknameAndTeam(player.nickname, player.team_id);
+      (player.hltv_player_id && playerRepository.findByHltvPlayerId(player.hltv_player_id, player.workspace_id)) ||
+      playerRepository.findByNicknameAndTeam(player.nickname, player.team_id, player.workspace_id);
 
     if (existing) {
       playerRepository.update(existing.id, {

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Copy, Download, ExternalLink, Plus, Radio } from 'lucide-react';
 import { useSocket } from '../../context/SocketContext';
 
@@ -9,8 +9,6 @@ interface OnlineSession {
   createdAt: number;
 }
 
-const ONLINE_SESSION_STORAGE_KEY = 'doutrinahud-online-session';
-
 function appUrl(path: string, sessionId: string, controlToken?: string) {
   const basePath = window.location.pathname.endsWith('/')
     ? window.location.pathname
@@ -20,9 +18,9 @@ function appUrl(path: string, sessionId: string, controlToken?: string) {
   return `${window.location.origin}${basePath}#${path}?session=${encodeURIComponent(sessionId)}${controlQuery}`;
 }
 
-function getSavedOnlineSession(): OnlineSession | null {
+function getSavedOnlineSession(storageKey: string): OnlineSession | null {
   try {
-    const savedSession = window.localStorage.getItem(ONLINE_SESSION_STORAGE_KEY);
+    const savedSession = window.localStorage.getItem(storageKey);
     if (!savedSession) return null;
 
     const session = JSON.parse(savedSession) as Partial<OnlineSession>;
@@ -79,7 +77,8 @@ function createOnlineGsiConfig(session: OnlineSession) {
 
 export function Dashboard() {
   const { connected, sessionId } = useSocket();
-  const [onlineSession, setOnlineSession] = useState<OnlineSession | null>(getSavedOnlineSession);
+  const [onlineSession, setOnlineSession] = useState<OnlineSession | null>(null);
+  const [storageKey, setStorageKey] = useState<string | null>(null);
   const [creatingSession, setCreatingSession] = useState(false);
   const [copiedValue, setCopiedValue] = useState<string | null>(null);
 
@@ -88,6 +87,18 @@ export function Dashboard() {
     setCopiedValue(label);
     window.setTimeout(() => setCopiedValue(null), 1800);
   };
+
+  useEffect(() => {
+    fetch('/api/auth/me')
+      .then((response) => response.json())
+      .then((data) => {
+        if (!data.user?.id) return;
+        const key = `doutrinahud-online-session:${data.user.id}`;
+        setStorageKey(key);
+        setOnlineSession(getSavedOnlineSession(key));
+      })
+      .catch(() => setOnlineSession(null));
+  }, []);
 
   const downloadGsiConfig = () => {
     if (!onlineSession) return;
@@ -112,7 +123,7 @@ export function Dashboard() {
       }
 
       const session = (await response.json()) as OnlineSession;
-      window.localStorage.setItem(ONLINE_SESSION_STORAGE_KEY, JSON.stringify(session));
+      if (storageKey) window.localStorage.setItem(storageKey, JSON.stringify(session));
       setOnlineSession(session);
     } catch (error) {
       console.error(error);

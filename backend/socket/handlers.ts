@@ -9,6 +9,7 @@ import { sessionService } from '../online/sessionService.js';
 // Inicializar Banco de Dados
 initDatabase();
 migrateJsonToSqlite(); // Migrar dados dos JSONs antigos se o banco estiver vazio
+sessionService.loadPersisted();
 
 let latestHudState: any = liveStateRepository.get(); // Carregar do SQLite na inicialização
 let latestGsiData: any = null;
