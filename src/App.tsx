@@ -11,6 +11,7 @@ import { Teams } from './frontend/pages/Teams';
 import { Players } from './frontend/pages/Players';
 import { LiveControl } from './frontend/pages/LiveControl';
 import { Overlays } from './frontend/pages/Overlays';
+import { Settings } from './frontend/pages/Settings';
 import { CaptainVetoView } from './frontend/pages/CaptainVetoView';
 import { OverlayView } from './overlay/OverlayView';
 import { VetoOverlayView } from './overlay/VetoOverlayView';
@@ -33,7 +34,7 @@ export default function App() {
             <Route path="players" element={<Players />} />
             <Route path="live" element={<LiveControl />} />
             <Route path="overlays" element={<Overlays />} />
-            <Route path="settings" element={<div className="text-neutral-400">Configurações (Em breve)</div>} />
+            <Route path="settings" element={<Settings />} />
           </Route>
 
           {/* Rotas do Capitão (Veto) */}
