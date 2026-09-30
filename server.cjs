@@ -22,14 +22,14 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 ));
 
 // server.ts
-var import_express8 = __toESM(require("express"), 1);
+var import_express10 = __toESM(require("express"), 1);
 var import_http = __toESM(require("http"), 1);
 var import_path5 = __toESM(require("path"), 1);
 var import_socket = require("socket.io");
 var import_vite = require("vite");
 
 // backend/routes/api.ts
-var import_express7 = require("express");
+var import_express9 = require("express");
 
 // backend/routes/teams.ts
 var import_express = require("express");
@@ -54,6 +54,49 @@ function ensureColumn(table, column, definition) {
 }
 function initDatabase() {
   console.log("[Database] Inicializando tabelas...");
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      email TEXT NOT NULL UNIQUE,
+      display_name TEXT NOT NULL,
+      password_hash TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS workspaces (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      owner_id TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS auth_sessions (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      token_hash TEXT NOT NULL UNIQUE,
+      expires_at INTEGER NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS online_sessions (
+      id TEXT PRIMARY KEY,
+      workspace_id TEXT NOT NULL,
+      gsi_token_hash TEXT NOT NULL,
+      control_token_hash TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      expires_at INTEGER NOT NULL
+    )
+  `);
+  db.exec("CREATE INDEX IF NOT EXISTS idx_online_sessions_workspace ON online_sessions(workspace_id)");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_online_sessions_expires ON online_sessions(expires_at)");
+  ensureColumn("online_sessions", "hud_state_json", "TEXT");
+  db.exec(`CREATE TABLE IF NOT EXISTS workspace_overlay_settings (workspace_id TEXT PRIMARY KEY, active_model_id TEXT NOT NULL, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP)`);
   db.exec(`
     CREATE TABLE IF NOT EXISTS teams (
       id INTEGER PRIMARY KEY,
@@ -234,25 +277,29 @@ function initDatabase() {
   ensureColumn("teams", "hltv_url", "TEXT");
   ensureColumn("teams", "hltv_team_id", "TEXT");
   ensureColumn("teams", "hltv_synced_at", "DATETIME");
+  ensureColumn("teams", "workspace_id", "TEXT");
   ensureColumn("players", "hltv_player_id", "TEXT");
   ensureColumn("players", "hltv_profile_url", "TEXT");
   ensureColumn("players", "avatar_source", "TEXT");
   ensureColumn("players", "hltv_synced_at", "DATETIME");
+  ensureColumn("players", "workspace_id", "TEXT");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_teams_workspace ON teams(workspace_id)");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_players_workspace ON players(workspace_id)");
   console.log("[Database] Tabelas prontas.");
 }
 var database_default = db;
 
 // backend/database/repositories/teamRepository.ts
 var teamRepository = {
-  getAll: () => {
-    const teams = database_default.prepare("SELECT * FROM teams ORDER BY name ASC").all();
+  getAll: (workspaceId) => {
+    const teams = workspaceId ? database_default.prepare("SELECT * FROM teams WHERE workspace_id = ? ORDER BY name ASC").all(workspaceId) : database_default.prepare("SELECT * FROM teams ORDER BY name ASC").all();
     return teams.map((t) => ({
       ...t,
       logo: t.logo_url
     }));
   },
-  getById: (id) => {
-    const team = database_default.prepare("SELECT * FROM teams WHERE id = ?").get(id);
+  getById: (id, workspaceId) => {
+    const team = workspaceId ? database_default.prepare("SELECT * FROM teams WHERE id = ? AND workspace_id = ?").get(id, workspaceId) : database_default.prepare("SELECT * FROM teams WHERE id = ?").get(id);
     if (!team) return null;
     return {
       ...team,
@@ -260,21 +307,21 @@ var teamRepository = {
     };
   },
   create: (team) => {
-    const { id, name, tag, logo, country, color, hltv_url, hltv_team_id } = team;
+    const { id, name, tag, logo, country, color, hltv_url, hltv_team_id, workspace_id } = team;
     const stmt = database_default.prepare(`
-      INSERT INTO teams (id, name, tag, logo_url, country, color, hltv_url, hltv_team_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO teams (id, name, tag, logo_url, country, color, hltv_url, hltv_team_id, workspace_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
-    return stmt.run(id, name, tag, logo, country, color, hltv_url || null, hltv_team_id || null);
+    return stmt.run(id, name, tag, logo, country, color, hltv_url || null, hltv_team_id || null, workspace_id || null);
   },
-  update: (id, team) => {
+  update: (id, team, workspaceId) => {
     const { name, tag, logo, country, color, hltv_url, hltv_team_id } = team;
     const stmt = database_default.prepare(`
       UPDATE teams 
       SET name = ?, tag = ?, logo_url = ?, country = ?, color = ?, hltv_url = ?, hltv_team_id = ?, updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
+      WHERE id = ? ${workspaceId ? "AND workspace_id = ?" : ""}
     `);
-    return stmt.run(name, tag, logo, country, color, hltv_url || null, hltv_team_id || null, id);
+    return workspaceId ? stmt.run(name, tag, logo, country, color, hltv_url || null, hltv_team_id || null, id, workspaceId) : stmt.run(name, tag, logo, country, color, hltv_url || null, hltv_team_id || null, id);
   },
   markHltvSynced: (id, hltvUrl, hltvTeamId) => {
     return database_default.prepare(`
@@ -283,8 +330,8 @@ var teamRepository = {
       WHERE id = ?
     `).run(hltvUrl, hltvTeamId || null, id);
   },
-  delete: (id) => {
-    return database_default.prepare("DELETE FROM teams WHERE id = ?").run(id);
+  delete: (id, workspaceId) => {
+    return workspaceId ? database_default.prepare("DELETE FROM teams WHERE id = ? AND workspace_id = ?").run(id, workspaceId) : database_default.prepare("DELETE FROM teams WHERE id = ?").run(id);
   }
 };
 
@@ -294,6 +341,7 @@ var import_path2 = __toESM(require("path"), 1);
 var DATA_DIR = import_path2.default.join(process.cwd(), "data");
 var TEAMS_FILE = import_path2.default.join(DATA_DIR, "teams.json");
 var PLAYERS_FILE = import_path2.default.join(DATA_DIR, "players.json");
+var UPLOADS_DIR = import_path2.default.join(process.cwd(), "database", "uploads");
 var ensureFile = (file) => {
   if (!import_fs2.default.existsSync(file)) {
     import_fs2.default.writeFileSync(file, JSON.stringify([]));
@@ -316,7 +364,8 @@ var saveImage = (base64Data, prefix) => {
     const data = matches[2];
     const buffer = Buffer.from(data, "base64");
     const filename = `${prefix}_${Date.now()}.${extension}`;
-    const filePath = import_path2.default.join(process.cwd(), "public", "uploads", filename);
+    import_fs2.default.mkdirSync(UPLOADS_DIR, { recursive: true });
+    const filePath = import_path2.default.join(UPLOADS_DIR, filename);
     import_fs2.default.writeFileSync(filePath, buffer);
     return `/uploads/${filename}`;
   } catch (e) {
@@ -325,14 +374,83 @@ var saveImage = (base64Data, prefix) => {
   }
 };
 
+// backend/auth/authService.ts
+var import_crypto = require("crypto");
+var SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1e3;
+function hashToken(token) {
+  return (0, import_crypto.createHash)("sha256").update(token).digest("hex");
+}
+function hashPassword(password) {
+  const salt = (0, import_crypto.randomBytes)(16).toString("hex");
+  return `${salt}:${(0, import_crypto.scryptSync)(password, salt, 64).toString("hex")}`;
+}
+function verifyPassword(password, storedHash) {
+  const [salt, hash] = storedHash.split(":");
+  if (!salt || !hash) return false;
+  const expected = Buffer.from(hash, "hex");
+  const actual = (0, import_crypto.scryptSync)(password, salt, 64);
+  return expected.length === actual.length && (0, import_crypto.timingSafeEqual)(expected, actual);
+}
+var authService = {
+  register(email, displayName, password) {
+    const id = (0, import_crypto.randomBytes)(16).toString("hex");
+    const workspaceId = (0, import_crypto.randomBytes)(16).toString("hex");
+    const normalizedEmail = email.trim().toLowerCase();
+    const transaction = database_default.transaction(() => {
+      database_default.prepare("INSERT INTO users (id, email, display_name, password_hash) VALUES (?, ?, ?, ?)").run(id, normalizedEmail, displayName.trim(), hashPassword(password));
+      database_default.prepare("INSERT INTO workspaces (id, name, owner_id) VALUES (?, ?, ?)").run(workspaceId, `${displayName.trim()} - Workspace`, id);
+    });
+    transaction();
+    return { id, email: normalizedEmail, displayName: displayName.trim(), workspaceId };
+  },
+  login(email, password) {
+    const user = database_default.prepare("SELECT * FROM users WHERE email = ?").get(email.trim().toLowerCase());
+    if (!user || !verifyPassword(password, user.password_hash)) return null;
+    const workspace = database_default.prepare("SELECT id, name FROM workspaces WHERE owner_id = ? ORDER BY created_at LIMIT 1").get(user.id);
+    return { id: user.id, email: user.email, displayName: user.display_name, workspaceId: workspace?.id, workspaceName: workspace?.name };
+  },
+  createSession(userId) {
+    const token = (0, import_crypto.randomBytes)(32).toString("base64url");
+    database_default.prepare("INSERT INTO auth_sessions (id, user_id, token_hash, expires_at) VALUES (?, ?, ?, ?)").run((0, import_crypto.randomBytes)(16).toString("hex"), userId, hashToken(token), Date.now() + SESSION_TTL_MS);
+    return token;
+  },
+  getUserByToken(token) {
+    if (!token) return null;
+    return database_default.prepare(`
+      SELECT u.id, u.email, u.display_name, w.id AS workspace_id, w.name AS workspace_name
+      FROM auth_sessions s
+      JOIN users u ON u.id = s.user_id
+      JOIN workspaces w ON w.owner_id = u.id
+      WHERE s.token_hash = ? AND s.expires_at > ?
+      ORDER BY w.created_at LIMIT 1
+    `).get(hashToken(token), Date.now());
+  },
+  logout(token) {
+    if (token) database_default.prepare("DELETE FROM auth_sessions WHERE token_hash = ?").run(hashToken(token));
+  }
+};
+
+// backend/auth/requireAuth.ts
+function readAuthCookie(header) {
+  return header?.split(";").map((item) => item.trim()).find((item) => item.startsWith("doutrinahud_auth="))?.slice("doutrinahud_auth=".length);
+}
+function requireAuth(req, res, next) {
+  const user = authService.getUserByToken(readAuthCookie(req.headers.cookie));
+  if (!user) return res.status(401).json({ error: "Faca login para acessar este recurso." });
+  req.authUser = user;
+  return next();
+}
+
 // backend/routes/teams.ts
 var router = (0, import_express.Router)();
+router.use(requireAuth);
 router.get("/", (req, res) => {
-  res.json(teamRepository.getAll());
+  res.json(teamRepository.getAll(req.authUser.workspace_id));
 });
 router.post("/", (req, res) => {
   const newTeam = {
     ...req.body,
+    workspace_id: req.authUser.workspace_id,
     id: Date.now(),
     logo: saveImage(req.body.logo, "team")
   };
@@ -342,12 +460,12 @@ router.post("/", (req, res) => {
 router.put("/:id", (req, res) => {
   const { id } = req.params;
   const logo = req.body.logo.startsWith("data:image") ? saveImage(req.body.logo, "team") : req.body.logo;
-  teamRepository.update(Number(id), { ...req.body, logo });
+  teamRepository.update(Number(id), { ...req.body, logo }, req.authUser.workspace_id);
   res.json({ success: true });
 });
 router.delete("/:id", (req, res) => {
   const { id } = req.params;
-  teamRepository.delete(Number(id));
+  teamRepository.delete(Number(id), req.authUser.workspace_id);
   res.json({ success: true });
 });
 var teams_default = router;
@@ -357,8 +475,8 @@ var import_express2 = require("express");
 
 // backend/database/repositories/playerRepository.ts
 var playerRepository = {
-  getAll: () => {
-    const players = database_default.prepare("SELECT * FROM players ORDER BY nickname ASC").all();
+  getAll: (workspaceId) => {
+    const players = workspaceId ? database_default.prepare("SELECT * FROM players WHERE workspace_id = ? ORDER BY nickname ASC").all(workspaceId) : database_default.prepare("SELECT * FROM players ORDER BY nickname ASC").all();
     return players.map((p) => ({
       ...p,
       avatar: p.avatar_url
@@ -391,7 +509,8 @@ var playerRepository = {
       country,
       hltv_player_id,
       hltv_profile_url,
-      avatar_source
+      avatar_source,
+      workspace_id
     } = player;
     const stmt = database_default.prepare(`
       INSERT INTO players (
@@ -406,9 +525,10 @@ var playerRepository = {
         hltv_player_id,
         hltv_profile_url,
         avatar_source,
+        workspace_id,
         hltv_synced_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     `);
     return stmt.run(
       id,
@@ -421,10 +541,11 @@ var playerRepository = {
       country,
       hltv_player_id || null,
       hltv_profile_url || null,
-      avatar_source || null
+      avatar_source || null,
+      workspace_id || null
     );
   },
-  update: (id, player) => {
+  update: (id, player, workspaceId) => {
     const {
       nickname,
       real_name,
@@ -452,7 +573,7 @@ var playerRepository = {
         avatar_source = COALESCE(?, avatar_source),
         hltv_synced_at = CURRENT_TIMESTAMP,
         updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
+      WHERE id = ? ${workspaceId ? "AND workspace_id = ?" : ""}
     `);
     return stmt.run(
       nickname,
@@ -465,21 +586,23 @@ var playerRepository = {
       hltv_player_id || null,
       hltv_profile_url || null,
       avatar_source || null,
-      id
+      id,
+      ...workspaceId ? [workspaceId] : []
     );
   },
-  findByHltvPlayerId: (hltvPlayerId) => {
-    return database_default.prepare("SELECT * FROM players WHERE hltv_player_id = ?").get(hltvPlayerId);
+  findByHltvPlayerId: (hltvPlayerId, workspaceId) => {
+    return workspaceId ? database_default.prepare("SELECT * FROM players WHERE hltv_player_id = ? AND workspace_id = ?").get(hltvPlayerId, workspaceId) : database_default.prepare("SELECT * FROM players WHERE hltv_player_id = ?").get(hltvPlayerId);
   },
-  findByNicknameAndTeam: (nickname, teamId) => {
-    return database_default.prepare(`
+  findByNicknameAndTeam: (nickname, teamId, workspaceId) => {
+    const statement = `
       SELECT * FROM players
-      WHERE lower(nickname) = lower(?) AND team_id = ?
+      WHERE lower(nickname) = lower(?) AND team_id = ? ${workspaceId ? "AND workspace_id = ?" : ""}
       LIMIT 1
-    `).get(nickname, teamId);
+    `;
+    return workspaceId ? database_default.prepare(statement).get(nickname, teamId, workspaceId) : database_default.prepare(statement).get(nickname, teamId);
   },
   upsertFromHltv: (player) => {
-    const existing = player.hltv_player_id && playerRepository.findByHltvPlayerId(player.hltv_player_id) || playerRepository.findByNicknameAndTeam(player.nickname, player.team_id);
+    const existing = player.hltv_player_id && playerRepository.findByHltvPlayerId(player.hltv_player_id, player.workspace_id) || playerRepository.findByNicknameAndTeam(player.nickname, player.team_id, player.workspace_id);
     if (existing) {
       playerRepository.update(existing.id, {
         ...existing,
@@ -495,19 +618,24 @@ var playerRepository = {
     });
     return { id, action: "created" };
   },
-  delete: (id) => {
-    return database_default.prepare("DELETE FROM players WHERE id = ?").run(id);
+  delete: (id, workspaceId) => {
+    return workspaceId ? database_default.prepare("DELETE FROM players WHERE id = ? AND workspace_id = ?").run(id, workspaceId) : database_default.prepare("DELETE FROM players WHERE id = ?").run(id);
   }
 };
 
 // backend/routes/players.ts
 var router2 = (0, import_express2.Router)();
+router2.use(requireAuth);
 router2.get("/", (req, res) => {
-  res.json(playerRepository.getAll());
+  res.json(playerRepository.getAll(req.authUser.workspace_id));
 });
 router2.post("/", (req, res) => {
+  if (req.body.team_id && !teamRepository.getById(Number(req.body.team_id), req.authUser.workspace_id)) {
+    return res.status(400).json({ error: "O time selecionado nao pertence ao seu workspace." });
+  }
   const newPlayer = {
     ...req.body,
+    workspace_id: req.authUser.workspace_id,
     id: Date.now(),
     avatar: saveImage(req.body.avatar, "player")
   };
@@ -516,13 +644,16 @@ router2.post("/", (req, res) => {
 });
 router2.put("/:id", (req, res) => {
   const { id } = req.params;
+  if (req.body.team_id && !teamRepository.getById(Number(req.body.team_id), req.authUser.workspace_id)) {
+    return res.status(400).json({ error: "O time selecionado nao pertence ao seu workspace." });
+  }
   const avatar = req.body.avatar && req.body.avatar.startsWith("data:image") ? saveImage(req.body.avatar, "player") : req.body.avatar;
-  playerRepository.update(Number(id), { ...req.body, avatar });
+  playerRepository.update(Number(id), { ...req.body, avatar }, req.authUser.workspace_id);
   res.json({ success: true });
 });
 router2.delete("/:id", (req, res) => {
   const { id } = req.params;
-  playerRepository.delete(Number(id));
+  playerRepository.delete(Number(id), req.authUser.workspace_id);
   res.json({ success: true });
 });
 var players_default = router2;
@@ -536,13 +667,171 @@ var GSIEmitter = class extends import_events.EventEmitter {
 };
 var gsiEmitter = new GSIEmitter();
 
+// backend/gsi/normalizeGameState.ts
+function normalizeGameState(gameState) {
+  const rawGrenades = gameState.grenades || gameState.allgrenades || gameState.allgrenades_map || null;
+  return {
+    provider: gameState.provider || null,
+    map: {
+      name: gameState.map?.name || null,
+      phase: gameState.map?.phase || null,
+      round: gameState.map?.round || 0,
+      team_ct: gameState.map?.team_ct || null,
+      team_t: gameState.map?.team_t || null,
+      num_matches_to_win_series: gameState.map?.num_matches_to_win_series || 0,
+      current_spectator_count: gameState.map?.current_spectator_count || 0,
+      souvenirs_total: gameState.map?.souvenirs_total || 0
+    },
+    round: {
+      phase: gameState.round?.phase || null,
+      bomb: gameState.round?.bomb || null,
+      win_team: gameState.round?.win_team || null
+    },
+    player: {
+      steamid: gameState.player?.steamid || null,
+      name: gameState.player?.name || null,
+      clan: gameState.player?.clan || null,
+      observer_slot: gameState.player?.observer_slot || null,
+      team: gameState.player?.team || null,
+      activity: gameState.player?.activity || null,
+      match_stats: gameState.player?.match_stats || null,
+      state: gameState.player?.state || null,
+      weapons: gameState.player?.weapons || null
+    },
+    allplayers: gameState.allplayers || null,
+    phase_countdowns: {
+      phase: gameState.phase_countdowns?.phase || null,
+      phase_ends_in: gameState.phase_countdowns?.phase_ends_in || null
+    },
+    bomb: {
+      state: gameState.bomb?.state || null,
+      position: gameState.bomb?.position || null,
+      countdown: gameState.bomb?.countdown || null
+    },
+    grenades: rawGrenades,
+    auth: gameState.auth || null
+  };
+}
+
+// backend/online/sessionService.ts
+var import_crypto2 = require("crypto");
+var LOCAL_SESSION_ID = "local";
+var SESSION_TTL_MS2 = 7 * 24 * 60 * 60 * 1e3;
+var sessions = /* @__PURE__ */ new Map();
+var now = () => Date.now();
+var hashToken2 = (token) => (0, import_crypto2.createHash)("sha256").update(token).digest("hex");
+var createSessionId = () => (0, import_crypto2.randomBytes)(6).toString("hex");
+var createToken = () => (0, import_crypto2.randomBytes)(24).toString("base64url");
+function tokensMatch(expectedHash, token) {
+  if (!expectedHash || !token) return false;
+  const expected = Buffer.from(expectedHash, "hex");
+  const actual = Buffer.from(hashToken2(token), "hex");
+  return expected.length === actual.length && (0, import_crypto2.timingSafeEqual)(expected, actual);
+}
+function saveSession(session) {
+  if (session.id === LOCAL_SESSION_ID || !session.workspaceId || !session.tokenHash || !session.controlTokenHash) return;
+  const expiresAt = now() + SESSION_TTL_MS2;
+  database_default.prepare(`
+    INSERT INTO online_sessions (id, workspace_id, gsi_token_hash, control_token_hash, created_at, updated_at, expires_at, hud_state_json)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET updated_at = excluded.updated_at, expires_at = excluded.expires_at, hud_state_json = excluded.hud_state_json
+  `).run(session.id, session.workspaceId, session.tokenHash, session.controlTokenHash, session.createdAt, session.updatedAt, expiresAt, session.latestHudState ? JSON.stringify(session.latestHudState) : null);
+}
+function createRecord(id, token, controlToken, initialHudState = null, workspaceId = null, createdAt = now(), updatedAt = createdAt) {
+  const session = {
+    id,
+    token,
+    controlToken,
+    tokenHash: token ? hashToken2(token) : null,
+    controlTokenHash: controlToken ? hashToken2(controlToken) : null,
+    workspaceId,
+    createdAt,
+    updatedAt,
+    latestGsiData: null,
+    latestHudState: initialHudState
+  };
+  sessions.set(id, session);
+  return session;
+}
+var sessionService = {
+  localSessionId: LOCAL_SESSION_ID,
+  roomName: (sessionId) => `session:${sessionId}`,
+  loadPersisted() {
+    database_default.prepare("DELETE FROM online_sessions WHERE expires_at <= ?").run(now());
+    const rows = database_default.prepare("SELECT * FROM online_sessions WHERE expires_at > ?").all(now());
+    rows.forEach((row) => {
+      if (sessions.has(row.id)) return;
+      let savedHudState = null;
+      try {
+        savedHudState = row.hud_state_json ? JSON.parse(row.hud_state_json) : null;
+      } catch {
+        savedHudState = null;
+      }
+      const session = createRecord(row.id, null, null, savedHudState, row.workspace_id, row.created_at, row.updated_at);
+      session.tokenHash = row.gsi_token_hash;
+      session.controlTokenHash = row.control_token_hash;
+    });
+  },
+  getOrCreateLocal(initialHudState = null) {
+    const existing = sessions.get(LOCAL_SESSION_ID);
+    if (existing) {
+      if (initialHudState && !existing.latestHudState) existing.latestHudState = initialHudState;
+      return existing;
+    }
+    return createRecord(LOCAL_SESSION_ID, null, null, initialHudState);
+  },
+  create(workspaceId) {
+    let id = createSessionId();
+    while (sessions.has(id)) id = createSessionId();
+    const session = createRecord(id, createToken(), createToken(), null, workspaceId);
+    saveSession(session);
+    return session;
+  },
+  get(sessionId) {
+    if (!sessionId || sessionId === LOCAL_SESSION_ID) return sessions.get(LOCAL_SESSION_ID) || null;
+    return sessions.get(sessionId) || null;
+  },
+  getPublic(sessionId) {
+    const session = this.get(sessionId);
+    if (!session) return null;
+    return { id: session.id, createdAt: session.createdAt, updatedAt: session.updatedAt, active: Boolean(session.latestGsiData) };
+  },
+  verifyToken(sessionId, token) {
+    return tokensMatch(this.get(sessionId)?.tokenHash || null, token);
+  },
+  verifyControlToken(sessionId, token) {
+    return tokensMatch(this.get(sessionId)?.controlTokenHash || null, token);
+  },
+  updateGsi(sessionId, data) {
+    const session = this.get(sessionId);
+    if (!session) return null;
+    session.latestGsiData = data;
+    session.updatedAt = now();
+    saveSession(session);
+    return session;
+  },
+  updateHud(sessionId, data) {
+    const session = this.get(sessionId);
+    if (!session) return null;
+    session.latestHudState = data;
+    session.updatedAt = now();
+    saveSession(session);
+    return session;
+  }
+};
+
 // backend/routes/gsi.ts
 var router3 = (0, import_express3.Router)();
 router3.post("/", (req, res) => {
   try {
     const data = req.body;
     if (data && data.provider && data.provider.appid === 730) {
-      gsiEmitter.emit("gsi:update", data);
+      const payload = normalizeGameState(data);
+      sessionService.updateGsi(sessionService.localSessionId, payload);
+      gsiEmitter.emit("gsi:update", {
+        sessionId: sessionService.localSessionId,
+        data: payload
+      });
     }
     res.status(200).send("OK");
   } catch (error) {
@@ -567,12 +856,12 @@ var steamProfileService = {
       return {};
     }
     const uniqueSteamids = [...new Set(steamids)].filter((id) => id && id.length > 0);
-    const now = Date.now();
+    const now2 = Date.now();
     const profiles = {};
     const toFetch = [];
     for (const steamid of uniqueSteamids) {
       const cached = steamProfileCache.get(steamid);
-      if (cached && now - cached.fetchedAt < CACHE_DURATION) {
+      if (cached && now2 - cached.fetchedAt < CACHE_DURATION) {
         profiles[steamid] = cached.profile;
       } else {
         toFetch.push(steamid);
@@ -606,7 +895,7 @@ var steamProfileService = {
           profiles[profile.steamid] = profile;
           steamProfileCache.set(profile.steamid, {
             profile,
-            fetchedAt: now
+            fetchedAt: now2
           });
         }
       }
@@ -647,18 +936,30 @@ function parseModel(row) {
   };
 }
 var overlayModelRepository = {
-  getAll: () => {
+  getAll: (workspaceId) => {
     const rows = database_default.prepare("SELECT * FROM overlay_models ORDER BY is_active DESC, is_default DESC, created_at ASC").all();
-    return rows.map(parseModel);
+    const activeId = workspaceId ? database_default.prepare("SELECT active_model_id FROM workspace_overlay_settings WHERE workspace_id = ?").get(workspaceId) : null;
+    return rows.map((row) => parseModel({ ...row, is_active: workspaceId ? Number(row.id === activeId?.active_model_id) : row.is_active }));
   },
-  getActive: () => {
+  getActive: (workspaceId) => {
+    if (workspaceId) {
+      const setting = database_default.prepare("SELECT active_model_id FROM workspace_overlay_settings WHERE workspace_id = ?").get(workspaceId);
+      if (setting) {
+        const model = database_default.prepare("SELECT * FROM overlay_models WHERE id = ?").get(setting.active_model_id);
+        return model ? parseModel(model) : null;
+      }
+    }
     const row = database_default.prepare("SELECT * FROM overlay_models WHERE is_active = 1 LIMIT 1").get();
     return row ? parseModel(row) : null;
   },
-  setActive: (id) => {
+  setActive: (id, workspaceId) => {
     const model = database_default.prepare("SELECT id FROM overlay_models WHERE id = ?").get(id);
     if (!model) {
       return false;
+    }
+    if (workspaceId) {
+      database_default.prepare(`INSERT INTO workspace_overlay_settings (workspace_id, active_model_id, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP) ON CONFLICT(workspace_id) DO UPDATE SET active_model_id = excluded.active_model_id, updated_at = CURRENT_TIMESTAMP`).run(workspaceId, id);
+      return true;
     }
     const transaction = database_default.transaction(() => {
       database_default.prepare("UPDATE overlay_models SET is_active = 0").run();
@@ -675,15 +976,16 @@ var overlayModelRepository = {
 
 // backend/routes/overlays.ts
 var router5 = (0, import_express5.Router)();
-router5.get("/", (_req, res) => {
-  res.json(overlayModelRepository.getAll());
+router5.get("/", requireAuth, (req, res) => {
+  res.json(overlayModelRepository.getAll(req.authUser.workspace_id));
 });
-router5.get("/active", (_req, res) => {
-  const activeModel = overlayModelRepository.getActive();
+router5.get("/active", (req, res) => {
+  const session = sessionService.get(String(req.query.session || ""));
+  const activeModel = overlayModelRepository.getActive(session?.workspaceId || void 0);
   res.json(activeModel);
 });
-router5.put("/:id/active", (req, res) => {
-  const success = overlayModelRepository.setActive(String(req.params.id));
+router5.put("/:id/active", requireAuth, (req, res) => {
+  const success = overlayModelRepository.setActive(String(req.params.id), req.authUser.workspace_id);
   if (!success) {
     return res.status(404).json({ success: false, error: "Overlay model not found" });
   }
@@ -915,7 +1217,7 @@ async function downloadPlayerImage(imageUrl, hltvPlayerId, nickname) {
   if (!response.ok) return "";
   const contentType = response.headers.get("content-type") || "";
   const extension = contentType.includes("png") ? "png" : contentType.includes("webp") ? "webp" : contentType.includes("jpeg") || contentType.includes("jpg") ? "jpg" : import_path3.default.extname(new URL(normalizedImageUrl).pathname).replace(".", "") || "jpg";
-  const uploadsDir = import_path3.default.join(process.cwd(), "public", "uploads", "players");
+  const uploadsDir = import_path3.default.join(process.cwd(), "database", "uploads", "players");
   import_fs3.default.mkdirSync(uploadsDir, { recursive: true });
   const fileName = `hltv_${hltvPlayerId || sanitizeFilePart(nickname)}_${sanitizeFilePart(nickname)}.${extension}`;
   const filePath = import_path3.default.join(uploadsDir, fileName);
@@ -923,7 +1225,7 @@ async function downloadPlayerImage(imageUrl, hltvPlayerId, nickname) {
   import_fs3.default.writeFileSync(filePath, buffer);
   return `/uploads/players/${fileName}`;
 }
-router6.post("/import-team", async (req, res) => {
+router6.post("/import-team", requireAuth, async (req, res) => {
   try {
     const teamId = Number(req.body.teamId);
     const hltvUrl = normalizeHltvUrl(req.body.hltvUrl);
@@ -933,7 +1235,7 @@ router6.post("/import-team", async (req, res) => {
         error: "Informe um teamId e uma URL de time HLTV valida."
       });
     }
-    const team = teamRepository.getById(teamId);
+    const team = teamRepository.getById(teamId, req.authUser.workspace_id);
     if (!team) {
       return res.status(404).json({ success: false, error: "Time nao encontrado." });
     }
@@ -991,7 +1293,8 @@ router6.post("/import-team", async (req, res) => {
         country: null,
         hltv_player_id: hltvPlayerId,
         hltv_profile_url: hltvProfileUrl,
-        avatar_source: avatar ? "hltv" : null
+        avatar_source: avatar ? "hltv" : null,
+        workspace_id: req.authUser.workspace_id
       });
       importedPlayers.push({
         id: result.id,
@@ -1020,12 +1323,70 @@ router6.post("/import-team", async (req, res) => {
 });
 var hltv_default = router6;
 
-// backend/routes/api.ts
+// backend/routes/sessions.ts
+var import_express7 = require("express");
 var router7 = (0, import_express7.Router)();
-router7.get("/health", (req, res) => {
+router7.post("/", requireAuth, (req, res) => {
+  const session = sessionService.create(req.authUser.workspace_id);
+  return res.status(201).json({
+    id: session.id,
+    token: session.token,
+    controlToken: session.controlToken,
+    createdAt: session.createdAt
+  });
+});
+router7.get("/:sessionId", (req, res) => {
+  const session = sessionService.getPublic(req.params.sessionId);
+  if (!session) {
+    return res.status(404).json({ error: "Sessao nao encontrada." });
+  }
+  return res.json(session);
+});
+var sessions_default = router7;
+
+// backend/routes/auth.ts
+var import_express8 = require("express");
+var router8 = (0, import_express8.Router)();
+var COOKIE_NAME = "doutrinahud_auth";
+function readCookie(header) {
+  return header?.split(";").map((item) => item.trim()).find((item) => item.startsWith(`${COOKIE_NAME}=`))?.slice(COOKIE_NAME.length + 1);
+}
+function sendUser(res, user) {
+  return res.json({ user: user && { id: user.id, email: user.email, displayName: user.display_name || user.displayName, workspaceId: user.workspace_id || user.workspaceId, workspaceName: user.workspace_name || user.workspaceName } });
+}
+router8.post("/register", (req, res) => {
+  const { email, displayName, password } = req.body || {};
+  if (!/^\S+@\S+\.\S+$/.test(String(email || "")) || String(displayName || "").trim().length < 2 || String(password || "").length < 8) return res.status(400).json({ error: "Informe nome, email valido e senha com ao menos 8 caracteres." });
+  try {
+    const user = authService.register(email, displayName, password);
+    const token = authService.createSession(user.id);
+    res.setHeader("Set-Cookie", `${COOKIE_NAME}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000${process.env.NODE_ENV === "production" ? "; Secure" : ""}`);
+    return sendUser(res, user);
+  } catch (error) {
+    return res.status(error?.message?.includes("UNIQUE") ? 409 : 500).json({ error: "Nao foi possivel criar a conta." });
+  }
+});
+router8.post("/login", (req, res) => {
+  const user = authService.login(String(req.body?.email || ""), String(req.body?.password || ""));
+  if (!user) return res.status(401).json({ error: "Email ou senha invalidos." });
+  const token = authService.createSession(user.id);
+  res.setHeader("Set-Cookie", `${COOKIE_NAME}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000${process.env.NODE_ENV === "production" ? "; Secure" : ""}`);
+  return sendUser(res, user);
+});
+router8.get("/me", (req, res) => sendUser(res, authService.getUserByToken(readCookie(req.headers.cookie))));
+router8.post("/logout", (req, res) => {
+  authService.logout(readCookie(req.headers.cookie));
+  res.setHeader("Set-Cookie", `${COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`);
+  return res.status(204).send();
+});
+var auth_default = router8;
+
+// backend/routes/api.ts
+var router9 = (0, import_express9.Router)();
+router9.get("/health", (req, res) => {
   res.json({ status: "ok", message: "DoutrinaHUD API rodando" });
 });
-router7.get("/stats", (req, res) => {
+router9.get("/stats", (req, res) => {
   try {
     const teams = getTeams();
     const players = getPlayers();
@@ -1039,16 +1400,18 @@ router7.get("/stats", (req, res) => {
     res.json({ teams: 0, players: 0, activeMatches: 0 });
   }
 });
-router7.use("/teams", teams_default);
-router7.use("/players", players_default);
-router7.use("/gsi", gsi_default);
-router7.use("/steam", steam_default);
-router7.use("/overlays", overlays_default);
-router7.use("/hltv", hltv_default);
-var api_default = router7;
+router9.use("/teams", teams_default);
+router9.use("/players", players_default);
+router9.use("/gsi", gsi_default);
+router9.use("/steam", steam_default);
+router9.use("/overlays", overlays_default);
+router9.use("/hltv", hltv_default);
+router9.use("/sessions", sessions_default);
+router9.use("/auth", auth_default);
+var api_default = router9;
 
 // backend/vetoService.ts
-var import_crypto = __toESM(require("crypto"), 1);
+var import_crypto3 = __toESM(require("crypto"), 1);
 
 // backend/database/repositories/vetoRepository.ts
 var vetoRepository = {
@@ -1254,7 +1617,7 @@ var VetoService = class {
     const flow = this.generateFlow(format);
     const generateToken = () => {
       try {
-        return import_crypto.default.randomUUID().substring(0, 8);
+        return import_crypto3.default.randomUUID().substring(0, 8);
       } catch (e) {
         return Math.random().toString(36).substring(2, 10);
       }
@@ -1367,7 +1730,7 @@ var VetoService = class {
       const required = currentStep.amount || 1;
       if (mapNames.length !== required) return null;
       const action = {
-        id: import_crypto.default.randomUUID(),
+        id: import_crypto3.default.randomUUID(),
         stepIndex: session.currentStepIndex,
         action: "ban",
         teamSide: mySide,
@@ -1381,7 +1744,7 @@ var VetoService = class {
       if (mapNames.length !== 1) return null;
       const mapName = mapNames[0];
       const action = {
-        id: import_crypto.default.randomUUID(),
+        id: import_crypto3.default.randomUUID(),
         stepIndex: session.currentStepIndex,
         action: "pick",
         teamSide: mySide,
@@ -1421,7 +1784,7 @@ var VetoService = class {
     const mySide = isLeft ? "left" : "right";
     if (session.currentTurn !== mySide) return null;
     const action = {
-      id: import_crypto.default.randomUUID(),
+      id: import_crypto3.default.randomUUID(),
       stepIndex: session.currentStepIndex,
       action: "side_choice",
       teamSide: mySide,
@@ -1459,7 +1822,7 @@ var VetoService = class {
       const deciderMap = session.availableMaps[0];
       if (deciderMap) {
         const action = {
-          id: import_crypto.default.randomUUID(),
+          id: import_crypto3.default.randomUUID(),
           stepIndex: session.currentStepIndex,
           action: "decider",
           teamSide: null,
@@ -1628,36 +1991,62 @@ var liveStateRepository = {
 // backend/socket/handlers.ts
 initDatabase();
 migrateJsonToSqlite();
+sessionService.loadPersisted();
 var latestHudState = liveStateRepository.get();
-var latestGsiData = null;
+sessionService.getOrCreateLocal(liveStateRepository.get());
 function setupSocket(io) {
-  gsiEmitter.on("gsi:update", (data) => {
-    latestGsiData = data;
-    io.volatile.emit("gsi:update", data);
+  gsiEmitter.on("gsi:update", ({ sessionId, data }) => {
+    sessionService.updateGsi(sessionId, data);
+    io.to(sessionService.roomName(sessionId)).volatile.emit("gsi:update", data);
   });
   io.on("connection", (socket) => {
-    console.log("Novo cliente conectado:", socket.id);
+    const requestedSessionId = String(
+      socket.handshake.auth?.sessionId || socket.handshake.query.session || sessionService.localSessionId
+    );
+    const session = sessionService.get(requestedSessionId);
+    if (!session) {
+      socket.emit("session:error", { message: "Sessao nao encontrada." });
+      socket.disconnect(true);
+      return;
+    }
+    socket.data.sessionId = session.id;
+    socket.data.canControl = session.id === sessionService.localSessionId || sessionService.verifyControlToken(session.id, String(socket.handshake.auth?.controlToken || ""));
+    socket.join(sessionService.roomName(session.id));
+    console.log("Novo cliente conectado:", socket.id, "sessao:", session.id);
     socket.on("overlay:ready", () => {
       console.log("Overlay inicializado no cliente", socket.id);
-      socket.emit("hud:update", latestHudState || { message: "Bem-vindo ao DoutrinaHUD" });
-      if (latestGsiData) {
-        socket.emit("gsi:update", latestGsiData);
+      const activeSession = sessionService.get(socket.data.sessionId);
+      socket.emit(
+        "hud:update",
+        activeSession?.latestHudState || { message: "Bem-vindo ao DoutrinaHUD" }
+      );
+      if (activeSession?.latestGsiData) {
+        socket.emit("gsi:update", activeSession.latestGsiData);
       }
     });
     socket.on("hud:command", (command) => {
+      if (!socket.data.canControl) {
+        socket.emit("session:error", { message: "Chave de controle invalida." });
+        return;
+      }
       console.log("Comando recebido do painel");
-      latestHudState = command;
-      if (command.type === "SYNC") {
+      const sessionId = socket.data.sessionId;
+      const updatedSession = sessionService.updateHud(sessionId, command);
+      if (!updatedSession) {
+        socket.emit("session:error", { message: "Sessao nao encontrada." });
+        return;
+      }
+      if (sessionId === sessionService.localSessionId && command.type === "SYNC") {
         liveStateRepository.save(command);
       }
-      io.emit("hud:update", command);
+      io.to(sessionService.roomName(sessionId)).emit("hud:update", command);
     });
     socket.on("veto:create", (data) => {
       console.log("Recebido veto:create", data);
       try {
-        const session = vetoService.createSession(data.matchId, data.format, data.leftTeam, data.rightTeam);
+        const session2 = vetoService.createSession(data.matchId, data.format, data.leftTeam, data.rightTeam);
         console.log("Sess\xE3o criada com sucesso, emitindo veto:update");
-        io.emit("veto:update", session);
+        io.emit("veto:update", session2);
       } catch (error) {
         console.error("ERRO CR\xCDTICO ao criar sess\xE3o de veto:", error);
         socket.emit("veto:error", { message: "Erro ao criar sess\xE3o no servidor", error: error.message });
@@ -1665,44 +2054,44 @@ function setupSocket(io) {
     });
     socket.on("veto:join", (data) => {
       console.log("Recebido veto:join", data);
-      const session = vetoService.updateConnectionStatus(data.matchId, data.token, true);
-      if (session) {
-        io.emit("veto:update", session);
+      const session2 = vetoService.updateConnectionStatus(data.matchId, data.token, true);
+      if (session2) {
+        io.emit("veto:update", session2);
       }
     });
     socket.on("veto:captain_ready", (data) => {
       console.log("Recebido veto:captain_ready", data);
-      const session = vetoService.setReady(data.matchId, data.token, data.ready);
-      if (session) {
-        io.emit("veto:update", session);
+      const session2 = vetoService.setReady(data.matchId, data.token, data.ready);
+      if (session2) {
+        io.emit("veto:update", session2);
       }
     });
     socket.on("veto:start", (data) => {
       console.log("Recebido veto:start", data);
-      const session = vetoService.startVeto(data.matchId);
-      if (session) {
-        io.emit("veto:update", session);
+      const session2 = vetoService.startVeto(data.matchId);
+      if (session2) {
+        io.emit("veto:update", session2);
       }
     });
     socket.on("veto:submit_action", (data) => {
       console.log("Recebido veto:submit_action", data);
-      const session = vetoService.submitAction(data.matchId, data.token, data.mapNames);
-      if (session) {
-        io.emit("veto:update", session);
+      const session2 = vetoService.submitAction(data.matchId, data.token, data.mapNames);
+      if (session2) {
+        io.emit("veto:update", session2);
       }
     });
     socket.on("veto:submit_side_choice", (data) => {
       console.log("Recebido veto:submit_side_choice", data);
-      const session = vetoService.submitSideChoice(data.matchId, data.token, data.startingSide);
-      if (session) {
-        io.emit("veto:update", session);
+      const session2 = vetoService.submitSideChoice(data.matchId, data.token, data.startingSide);
+      if (session2) {
+        io.emit("veto:update", session2);
       }
     });
     socket.on("veto:reset", (data) => {
       console.log("Recebido veto:reset", data);
-      const session = vetoService.resetSession(data.matchId);
-      if (session) {
-        io.emit("veto:update", session);
+      const session2 = vetoService.resetSession(data.matchId);
+      if (session2) {
+        io.emit("veto:update", session2);
       }
     });
     socket.on("veto:delete", (data) => {
@@ -1713,9 +2102,9 @@ function setupSocket(io) {
       }
     });
     socket.on("veto:get_status", (data) => {
-      const session = vetoService.getSession(data.matchId);
-      if (session) {
-        socket.emit("veto:update", session);
+      const session2 = vetoService.getSession(data.matchId);
+      if (session2) {
+        socket.emit("veto:update", session2);
       }
     });
     socket.on("disconnect", () => {
@@ -1726,14 +2115,15 @@ function setupSocket(io) {
 
 // server.ts
 async function startServer() {
-  const app = (0, import_express8.default)();
+  const app = (0, import_express10.default)();
   const server = import_http.default.createServer(app);
   const io = new import_socket.Server(server, {
     cors: {
       origin: "*"
     }
   });
-  const PORT = 3e3;
+  const PORT = Number(process.env.PORT || 3e3);
+  const isProduction = process.env.NODE_ENV === "production" || process.argv[1]?.endsWith(".cjs");
   app.set("etag", false);
   app.use((req, res, next) => {
     if (req.method === "GET") {
@@ -1747,10 +2137,14 @@ async function startServer() {
     }
     next();
   });
-  app.use(import_express8.default.json({ limit: "10mb" }));
+  app.use(import_express10.default.json({ limit: "10mb" }));
   app.use(
     "/uploads",
-    import_express8.default.static(import_path5.default.join(process.cwd(), "public/uploads"))
+    import_express10.default.static(import_path5.default.join(process.cwd(), "database", "uploads"))
+  );
+  app.use(
+    "/uploads",
+    import_express10.default.static(import_path5.default.join(process.cwd(), "public/uploads"))
   );
   app.post("/gsi", async (req, res) => {
     try {
@@ -1798,7 +2192,11 @@ async function startServer() {
         grenades: rawGrenades,
         auth: gameState.auth || null
       };
-      gsiEmitter.emit("gsi:update", payload);
+      sessionService.updateGsi(sessionService.localSessionId, payload);
+      gsiEmitter.emit("gsi:update", {
+        sessionId: sessionService.localSessionId,
+        data: payload
+      });
       return res.sendStatus(200);
     } catch (error) {
       console.error("Erro ao processar GSI:", error);
@@ -1807,9 +2205,25 @@ async function startServer() {
       });
     }
   });
+  app.post("/gsi/:sessionId", (req, res) => {
+    try {
+      const { sessionId } = req.params;
+      const token = req.header("x-doutrinahud-session-token") || req.body?.auth?.token || null;
+      if (!sessionService.verifyToken(sessionId, token)) {
+        return res.status(401).json({ error: "Token de sessao invalido." });
+      }
+      const payload = normalizeGameState(req.body);
+      sessionService.updateGsi(sessionId, payload);
+      gsiEmitter.emit("gsi:update", { sessionId, data: payload });
+      return res.sendStatus(200);
+    } catch (error) {
+      console.error("Erro ao processar GSI remoto:", error);
+      return res.status(500).json({ error: "Erro ao processar Game State Integration" });
+    }
+  });
   app.use("/api", api_default);
   setupSocket(io);
-  if (process.env.NODE_ENV !== "production") {
+  if (!isProduction) {
     const vite = await (0, import_vite.createServer)({
       server: {
         middlewareMode: true
@@ -1820,7 +2234,7 @@ async function startServer() {
   } else {
     const distPath = import_path5.default.join(process.cwd(), "dist");
     app.use(
-      import_express8.default.static(distPath, {
+      import_express10.default.static(distPath, {
         etag: false,
         lastModified: false,
         setHeaders: (res) => {
