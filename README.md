@@ -1,5 +1,49 @@
 # DoutrinaHUD — Contexto para o Codex
 
+## Uso rápido no Windows
+
+Requisitos:
+
+- Node.js 22 ou mais recente
+- Counter-Strike 2 e OBS, quando usados na transmissão
+
+Na pasta do projeto, instale as dependências e inicie o servidor:
+
+```powershell
+npm install
+npm run dev
+```
+
+O servidor usa a porta `3000`. Endereços principais:
+
+- Painel: `http://127.0.0.1:3000/#/admin`
+- Overlay ativa: `http://127.0.0.1:3000/#/overlay`
+- Overlay Professional: `http://127.0.0.1:3000/#/overlay/professional`
+- Overlay Broadcast: `http://127.0.0.1:3000/#/overlay/broadcast`
+- Veto: `http://127.0.0.1:3000/#/veto`
+
+No OBS, use uma Fonte de Navegador com resolução `1920x1080` e uma das URLs de overlay.
+
+Copie `gamestate_integration_doutrinahud.cfg` para a pasta `game/csgo/cfg` da instalação do CS2. O arquivo envia o GSI localmente para `http://127.0.0.1:3000/gsi`. Reinicie o CS2 depois de copiar ou alterar a CFG.
+
+### Acesso temporário com ngrok
+
+Com o servidor local aberto, execute em outro terminal:
+
+```powershell
+ngrok http 3000
+```
+
+Use a URL HTTPS gerada pelo ngrok seguida de `/#/overlay`. O CS2 no mesmo computador deve continuar usando o endpoint local `127.0.0.1`, sem expor a CFG ou tokens pela internet.
+
+### Validação antes de publicar
+
+```powershell
+npm run lint
+npm run build
+npm audit
+```
+
 ## Projeto
 
 DoutrinaHUD é uma HUD/overlay profissional para transmissões de CS2.
