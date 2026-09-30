@@ -1,6 +1,7 @@
 import { Shield, ShieldAlert, Crosshair, Sword } from 'lucide-react';
 import { motion } from 'motion/react';
 import { cn } from '../frontend/components/AdminLayout'; // Ajuste o caminho se necessário
+import { getWeaponIcon } from '../frontend/components/overlay/OverlayHelpers';
 
 interface PlayerPanelsProps {
   players: any[];

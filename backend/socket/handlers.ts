@@ -83,7 +83,7 @@ export function setupSocket(io: Server) {
     });
 
     // --- Veto Events ---
-    socket.on('veto:create', (data: { matchId: string, format: 'BO1' | 'BO3' | 'BO5', leftTeam: any, rightTeam: any }) => {
+    socket.on('veto:create', (data: { matchId: string, format: 'BO1' | 'BO3', leftTeam: any, rightTeam: any }) => {
       console.log('Recebido veto:create', data);
       try {
         const session = vetoService.createSession(data.matchId, data.format, data.leftTeam, data.rightTeam);

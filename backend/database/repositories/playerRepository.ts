@@ -12,7 +12,7 @@ export const playerRepository = {
   },
 
   getById: (id: number) => {
-    const player = db.prepare('SELECT * FROM players WHERE id = ?').get(id);
+    const player = db.prepare('SELECT * FROM players WHERE id = ?').get(id) as any;
     if (!player) return null;
     return {
       ...player,
@@ -141,9 +141,10 @@ export const playerRepository = {
   },
 
   upsertFromHltv: (player: any) => {
-    const existing =
+    const existing = (
       (player.hltv_player_id && playerRepository.findByHltvPlayerId(player.hltv_player_id, player.workspace_id)) ||
-      playerRepository.findByNicknameAndTeam(player.nickname, player.team_id, player.workspace_id);
+      playerRepository.findByNicknameAndTeam(player.nickname, player.team_id, player.workspace_id)
+    ) as any;
 
     if (existing) {
       playerRepository.update(existing.id, {

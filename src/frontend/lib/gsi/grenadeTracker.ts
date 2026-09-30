@@ -133,11 +133,6 @@ function getEffectDuration(grenade: GsiGrenade | TrackedGrenade) {
   const fromGsi = normalizeGsiTimeToMs(grenade.effecttime);
 
   if (fromGsi !== null) {
-
-    if (grenade.type === 'smoke') {
-      return Math.min(Math.max(1000, fromGsi), 18000);
-    }
-
     if (grenade.type === 'molotov') {
       return Math.min(Math.max(1000, fromGsi), EFFECT_DURATION.molotov);
     }

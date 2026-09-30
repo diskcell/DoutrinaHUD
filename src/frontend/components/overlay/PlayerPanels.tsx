@@ -7,6 +7,7 @@ interface PlayerPanelsProps {
   isRightSide?: boolean;
   isObserved?: string | null;
   isAutoMode?: boolean;
+  recentKills?: Set<string>;
 }
 
 export function PlayerPanels({ players, isRightSide, isObserved }: PlayerPanelsProps) {

@@ -14,7 +14,7 @@ export const teamRepository = {
   getById: (id: number, workspaceId?: string) => {
     const team = workspaceId
       ? db.prepare('SELECT * FROM teams WHERE id = ? AND workspace_id = ?').get(id, workspaceId)
-      : db.prepare('SELECT * FROM teams WHERE id = ?').get(id);
+      : db.prepare('SELECT * FROM teams WHERE id = ?').get(id) as any;
     if (!team) return null;
     return {
       ...team,

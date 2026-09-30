@@ -1,5 +1,5 @@
 import { cn } from '../AdminLayout';
-import { getWeaponIcon, formatWeaponName } from './PlayerCard';
+import { getWeaponIcon } from './OverlayHelpers';
 
 export function PlayerPanel({ player, isRightSide, isObserved, isAutoMode }: any) {
   const p = player;

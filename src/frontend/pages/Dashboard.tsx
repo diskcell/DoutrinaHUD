@@ -5,7 +5,7 @@ import { useSocket } from '../../context/SocketContext';
 interface OnlineSession {
   id: string;
   token: string;
-  controlToken: string;
+  controlToken?: string;
   createdAt: number;
 }
 
