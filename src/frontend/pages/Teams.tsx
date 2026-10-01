@@ -97,7 +97,21 @@ export function Teams() {
           body: { teamId: team.id, hltvUrl },
         });
 
-        if (error) throw error;
+        if (error) {
+          let message = 'Nao foi possivel executar a importacao da HLTV.';
+          const response = (error as any)?.context;
+
+          if (response instanceof Response) {
+            try {
+              const payload = await response.clone().json();
+              message = payload?.error || message;
+            } catch {
+              // Mantem uma mensagem amigavel quando a resposta nao for JSON.
+            }
+          }
+
+          throw new Error(message);
+        }
         if (!data?.success) throw new Error(data?.error || 'Erro ao importar jogadores do HLTV.');
 
         const withoutAvatar = data.players.filter((player: any) => !player.avatar_path).length;

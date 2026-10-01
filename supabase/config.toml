@@ -3,3 +3,6 @@ project_id = "ckbjuasdwouzveidcidw"
 [functions.super-api]
 verify_jwt = false
 
+[functions.import-hltv-team]
+verify_jwt = false
+

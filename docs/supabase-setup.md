@@ -77,11 +77,24 @@ Fluxo para o operador:
 O CFG usa `throttle 0.20`, limitado a aproximadamente cinco atualizacoes por
 segundo, para reduzir o consumo do plano gratuito sem prejudicar a HUD.
 
+## Importacao de times da HLTV
+
+Publique tambem a funcao autenticada que cria ou atualiza os cinco jogadores e
+armazena as fotos no bucket `doutrinahud-assets`:
+
+```powershell
+npx supabase functions deploy import-hltv-team --no-verify-jwt
+```
+
+O `--no-verify-jwt` permite que a propria funcao responda ao preflight CORS. A
+funcao valida o token do usuario antes de acessar qualquer time e confirma que
+ele e `owner` ou `editor` do workspace.
+
 ## Proximas etapas
 
 1. Publicar e testar a Edge Function GSI.
 2. Migrar o fluxo de veto para o Supabase.
-3. Criar a Edge Function de importacao HLTV.
+3. Testar periodicamente a importacao HLTV, pois o HTML do site pode mudar.
 4. Importar o SQLite e os uploads locais, se ainda houver dados antigos.
 
 ## Email de confirmacao
