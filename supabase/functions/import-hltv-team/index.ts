@@ -120,7 +120,7 @@ function extractLinkedPlayers(text: string) {
     add(match[1], match[2], match[3]);
   }
 
-  for (const match of text.matchAll(/https:\/\/www\.hltv\.org(\/player\/(\d+)\/([^\s)"'?#/]+))/gi)) {
+  for (const match of text.matchAll(/https?:\/\/www\.hltv\.org(\/player\/(\d+)\/([^\s)"'?#/]+))/gi)) {
     add(match[1], match[2], match[3]);
   }
 
@@ -129,6 +129,33 @@ function extractLinkedPlayers(text: string) {
   }
 
   return Array.from(players.values()).slice(0, 5);
+}
+
+function extractReaderStarterPlayers(markdown: string) {
+  const playersHeading = markdown.search(/^##\s+Players of\s+.+$/im);
+  if (playersHeading < 0) return [];
+
+  const afterHeading = markdown.slice(playersHeading);
+  const nextHeading = afterHeading.slice(3).search(/^##\s+/m);
+  const playersSection = nextHeading >= 0
+    ? afterHeading.slice(0, nextHeading + 3)
+    : afterHeading;
+  const players = new Map<string, RosterPlayer>();
+
+  for (const line of playersSection.split(/\r?\n/)) {
+    if (!/\|\s*STARTER\s*\|/i.test(line)) continue;
+
+    const match = line.match(
+      /https?:\/\/www\.hltv\.org(\/player\/(\d+)\/([^\s)"'?#/]+))/i,
+    );
+    if (!match) continue;
+
+    const [, pathName, id, slug] = match;
+    if (!players.has(id)) players.set(id, linkedPlayer(pathName, id, slug));
+  }
+
+  const roster = Array.from(players.values());
+  return roster.length === 5 ? roster : [];
 }
 
 function extractReaderRoster(markdown: string) {
@@ -164,8 +191,13 @@ function extractReaderRoster(markdown: string) {
 
 function extractPlayerLinks(teamText: string) {
   if (/^URL Source:\s*https?:\/\/www\.hltv\.org\/team\//im.test(teamText)) {
+    const starterPlayers = extractReaderStarterPlayers(teamText);
+    if (starterPlayers.length === 5) return starterPlayers;
+
     const readerRoster = extractReaderRoster(teamText);
     if (readerRoster.length === 5) return readerRoster;
+
+    return [];
   }
 
   const linked = extractLinkedPlayers(teamText);
