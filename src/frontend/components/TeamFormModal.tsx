@@ -1,6 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Upload } from 'lucide-react';
 import { cn } from './AdminLayout';
+import { isSupabaseConfigured } from '../../lib/supabase';
+import { useOptionalCloudSession } from '../context/CloudSessionContext';
+import { uploadCloudImage } from '../lib/cloudAssets';
+import { saveCloudTeam } from '../lib/cloudData';
 
 export interface Team {
   id?: number;
@@ -12,6 +16,7 @@ export interface Team {
   social_links: string;
   status: string;
   hltv_url?: string;
+  logo_path?: string | null;
 }
 
 interface Props {
@@ -47,6 +52,7 @@ function normalizeTeamFormData(team?: Partial<Team> | null): Team {
 }
 
 export function TeamFormModal({ isOpen, onClose, onSaved, initialData }: Props) {
+  const cloudSession = useOptionalCloudSession();
   const [formData, setFormData] = useState<Team>(emptyTeam);
   const [loading, setLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -81,6 +87,33 @@ export function TeamFormModal({ isOpen, onClose, onSaved, initialData }: Props) 
     setLoading(true);
     try {
       const isEdit = !!initialData?.id;
+      if (isSupabaseConfigured && cloudSession) {
+        let logoPath = initialData?.logo_path || null;
+
+        if (formData.logo.startsWith('data:image')) {
+          logoPath = await uploadCloudImage(cloudSession.workspaceId, 'teams', formData.logo);
+        }
+
+        await saveCloudTeam(
+          cloudSession.workspaceId,
+          {
+            name: formData.name.trim(),
+            tag: formData.tag.trim(),
+            logo_path: logoPath,
+            country: formData.country.trim() || null,
+            organization: formData.organization.trim() || null,
+            social_links: formData.social_links.trim() || null,
+            status: formData.status,
+            hltv_url: formData.hltv_url?.trim() || null,
+          },
+          initialData?.id
+        );
+
+        onSaved();
+        onClose();
+        return;
+      }
+
       // Note: we use absolute API path relative to origin. 
       // This ensures we always hit our node server when running locally.
       const url = isEdit ? `/api/teams/${initialData.id}` : '/api/teams';
@@ -97,11 +130,12 @@ export function TeamFormModal({ isOpen, onClose, onSaved, initialData }: Props) 
         onSaved();
         onClose();
       } else {
-        alert('Erro ao salvar time.');
+        const result = await res.json().catch(() => null);
+        alert(result?.error || 'Erro ao salvar time.');
       }
     } catch (err) {
       console.error(err);
-      alert('Erro de rede ao salvar time.');
+      alert(err instanceof Error ? err.message : 'Erro de rede ao salvar time.');
     } finally {
       setLoading(false);
     }

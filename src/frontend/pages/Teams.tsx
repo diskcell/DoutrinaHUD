@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react';
 import { Search, Plus, MapPin, Edit2, Trash2, Users, ShieldAlert, DownloadCloud } from 'lucide-react';
 import { cn } from '../components/AdminLayout';
 import { TeamFormModal, Team } from '../components/TeamFormModal';
+import { isSupabaseConfigured, requireSupabase } from '../../lib/supabase';
+import { useOptionalCloudSession } from '../context/CloudSessionContext';
+import { deleteCloudTeam, listCloudTeams } from '../lib/cloudData';
 
 interface TeamWithMeta extends Team {
   id: number;
@@ -9,6 +12,7 @@ interface TeamWithMeta extends Team {
 }
 
 export function Teams() {
+  const cloudSession = useOptionalCloudSession();
   const [teams, setTeams] = useState<TeamWithMeta[]>([]);
   const [search, setSearch] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -19,6 +23,11 @@ export function Teams() {
   const fetchTeams = async () => {
     try {
       setIsLoading(true);
+      if (isSupabaseConfigured && cloudSession) {
+        setTeams(await listCloudTeams(cloudSession.workspaceId) as TeamWithMeta[]);
+        return;
+      }
+
       const res = await fetch('/api/teams');
       if (res.ok) {
         const data = await res.json();
@@ -33,11 +42,17 @@ export function Teams() {
 
   useEffect(() => {
     fetchTeams();
-  }, []);
+  }, [cloudSession?.workspaceId]);
 
   const handleDelete = async (id: number) => {
     if (!confirm('Você tem certeza que deseja deletar este time? Esta ação não pode ser desfeita.')) return;
     try {
+      if (isSupabaseConfigured && cloudSession) {
+        await deleteCloudTeam(cloudSession.workspaceId, id);
+        await fetchTeams();
+        return;
+      }
+
       const res = await fetch(`/api/teams/${id}`, { method: 'DELETE' });
       if (res.ok) fetchTeams();
     } catch (e) {
@@ -65,6 +80,25 @@ export function Teams() {
     try {
       setImportingTeamId(team.id);
 
+      if (isSupabaseConfigured) {
+        const { data, error } = await requireSupabase().functions.invoke('import-hltv-team', {
+          body: { teamId: team.id, hltvUrl },
+        });
+
+        if (error) throw error;
+        if (!data?.success) throw new Error(data?.error || 'Erro ao importar jogadores do HLTV.');
+
+        const withoutAvatar = data.players.filter((player: any) => !player.avatar_path).length;
+        alert(
+          `HLTV importado: ${data.players.length} jogadores processados.` +
+            (withoutAvatar > 0
+              ? `\n${withoutAvatar} jogador(es) vieram sem foto.`
+              : '')
+        );
+        await fetchTeams();
+        return;
+      }
+
       const res = await fetch('/api/hltv/import-team', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -91,7 +125,7 @@ export function Teams() {
       fetchTeams();
     } catch (error) {
       console.error(error);
-      alert('Erro de rede ao importar jogadores do HLTV.');
+      alert(error instanceof Error ? error.message : 'Erro de rede ao importar jogadores do HLTV.');
     } finally {
       setImportingTeamId(null);
     }

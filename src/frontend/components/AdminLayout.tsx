@@ -4,6 +4,8 @@ import { useSocket } from '../../context/SocketContext';
 import { LayoutDashboard, Users, Trophy, Radio, Settings, ShieldAlert, Layers, LogOut } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { isSupabaseConfigured, requireSupabase } from '../../lib/supabase';
+import { useOptionalCloudSession } from '../context/CloudSessionContext';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -12,6 +14,7 @@ export function cn(...inputs: ClassValue[]) {
 export function AdminLayout() {
   const { connected, sessionId } = useSocket();
   const location = useLocation();
+  const cloudSession = useOptionalCloudSession();
   const [account, setAccount] = useState<{ displayName: string; workspaceName: string } | null>(null);
 
   const menu = [
@@ -25,16 +28,30 @@ export function AdminLayout() {
   ];
 
   const handleLogout = async () => {
-    await fetch('/api/auth/logout', { method: 'POST' });
+    if (isSupabaseConfigured) {
+      await requireSupabase().auth.signOut();
+    } else {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    }
     window.location.reload();
   };
 
   useEffect(() => {
+    if (cloudSession) {
+      setAccount({
+        displayName: cloudSession.displayName,
+        workspaceName: cloudSession.workspaceName,
+      });
+      return;
+    }
+
+    if (isSupabaseConfigured) return;
+
     fetch('/api/auth/me')
       .then((response) => response.json())
       .then((data) => setAccount(data.user || null))
       .catch(() => setAccount(null));
-  }, []);
+  }, [cloudSession]);
 
   return (
     <div className="flex h-screen bg-neutral-900 text-white font-sans">

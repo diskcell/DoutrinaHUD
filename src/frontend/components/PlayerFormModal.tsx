@@ -1,6 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Upload, User } from 'lucide-react';
 import { cn } from './AdminLayout';
+import { isSupabaseConfigured } from '../../lib/supabase';
+import { useOptionalCloudSession } from '../context/CloudSessionContext';
+import { uploadCloudImage } from '../lib/cloudAssets';
+import { saveCloudPlayer } from '../lib/cloudData';
 
 export interface Player {
   id?: number;
@@ -13,6 +17,7 @@ export interface Player {
   steam_link: string;
   faceit_link: string;
   status: string;
+  avatar_path?: string | null;
 }
 
 interface Props {
@@ -51,6 +56,7 @@ function normalizePlayerFormData(player?: Partial<Player> | null): Player {
 }
 
 export function PlayerFormModal({ isOpen, onClose, onSaved, initialData, teams }: Props) {
+  const cloudSession = useOptionalCloudSession();
   const [formData, setFormData] = useState<Player>(emptyPlayer);
   
   const [loading, setLoading] = useState(false);
@@ -87,6 +93,33 @@ export function PlayerFormModal({ isOpen, onClose, onSaved, initialData, teams }
     setLoading(true);
     try {
       const isEdit = !!initialData?.id;
+      if (isSupabaseConfigured && cloudSession) {
+        let avatarPath = initialData?.avatar_path || null;
+
+        if (formData.avatar.startsWith('data:image')) {
+          avatarPath = await uploadCloudImage(cloudSession.workspaceId, 'players', formData.avatar);
+        }
+
+        await saveCloudPlayer(
+          cloudSession.workspaceId,
+          {
+            team_id: formData.team_id === '' ? null : Number(formData.team_id),
+            nickname: formData.nickname.trim(),
+            real_name: formData.real_name.trim() || null,
+            avatar_path: avatarPath,
+            country: formData.country.trim() || null,
+            role: formData.role || null,
+            steam_link: formData.steam_link.trim() || null,
+            faceit_link: formData.faceit_link.trim() || null,
+            status: formData.status,
+          },
+          initialData?.id
+        );
+
+        onSaved();
+        return;
+      }
+
       const url = isEdit ? `/api/players/${initialData.id}` : '/api/players';
       const method = isEdit ? 'PUT' : 'POST';
 
@@ -100,11 +133,12 @@ export function PlayerFormModal({ isOpen, onClose, onSaved, initialData, teams }
         onSaved();
         // onClose is handled by onSaved in parent
       } else {
-        alert('Erro ao salvar jogador.');
+        const result = await res.json().catch(() => null);
+        alert(result?.error || 'Erro ao salvar jogador.');
       }
     } catch (err) {
       console.error(err);
-      alert('Erro de rede.');
+      alert(err instanceof Error ? err.message : 'Erro de rede.');
     } finally {
       setLoading(false);
     }

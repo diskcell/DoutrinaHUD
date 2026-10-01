@@ -2,6 +2,13 @@ import { useState, useEffect } from 'react';
 import { Search, Plus, MapPin, Edit2, Trash2, Users, User, ShieldAlert, Crosshair, ExternalLink } from 'lucide-react';
 import { cn } from '../components/AdminLayout';
 import { PlayerFormModal, Player } from '../components/PlayerFormModal';
+import { isSupabaseConfigured } from '../../lib/supabase';
+import { useOptionalCloudSession } from '../context/CloudSessionContext';
+import {
+  deleteCloudPlayer,
+  listCloudPlayers,
+  listCloudTeams,
+} from '../lib/cloudData';
 
 interface PlayerWithMeta extends Player {
   id: number;
@@ -9,6 +16,7 @@ interface PlayerWithMeta extends Player {
 }
 
 export function Players() {
+  const cloudSession = useOptionalCloudSession();
   const [players, setPlayers] = useState<PlayerWithMeta[]>([]);
   const [teams, setTeams] = useState<any[]>([]);
   const [search, setSearch] = useState('');
@@ -19,6 +27,11 @@ export function Players() {
   const fetchPlayers = async () => {
     try {
       setIsLoading(true);
+      if (isSupabaseConfigured && cloudSession) {
+        setPlayers(await listCloudPlayers(cloudSession.workspaceId) as PlayerWithMeta[]);
+        return;
+      }
+
       const res = await fetch('/api/players');
       if (res.ok) {
         const data = await res.json();
@@ -33,7 +46,14 @@ export function Players() {
 
   useEffect(() => {
     fetchPlayers();
-    
+
+    if (isSupabaseConfigured && cloudSession) {
+      listCloudTeams(cloudSession.workspaceId)
+        .then(setTeams)
+        .catch(console.error);
+      return;
+    }
+
     // Fetch real teams to relate to players visually
     fetch('/api/teams')
       .then(res => res.json())
@@ -41,11 +61,17 @@ export function Players() {
         if (Array.isArray(data)) setTeams(data);
       })
       .catch(console.error);
-  }, []);
+  }, [cloudSession?.workspaceId]);
 
   const handleDelete = async (id: number) => {
     if (!confirm('Você tem certeza que deseja deletar este jogador?')) return;
     try {
+      if (isSupabaseConfigured && cloudSession) {
+        await deleteCloudPlayer(cloudSession.workspaceId, id);
+        await fetchPlayers();
+        return;
+      }
+
       const res = await fetch(`/api/players/${id}`, { method: 'DELETE' });
       if (res.ok) fetchPlayers();
     } catch (e) {
@@ -76,7 +102,7 @@ export function Players() {
 
   const filteredPlayers = players.filter(p => 
     p.nickname.toLowerCase().includes(search.toLowerCase()) || 
-    p.real_name.toLowerCase().includes(search.toLowerCase())
+    (p.real_name || '').toLowerCase().includes(search.toLowerCase())
   );
 
   return (
