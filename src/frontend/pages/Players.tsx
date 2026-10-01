@@ -15,12 +15,16 @@ interface PlayerWithMeta extends Player {
   created_at: string;
 }
 
+const PLAYER_CREATE_MODAL_STATE_KEY = 'doutrinahud_player_create_modal_open';
+
 export function Players() {
   const cloudSession = useOptionalCloudSession();
   const [players, setPlayers] = useState<PlayerWithMeta[]>([]);
   const [teams, setTeams] = useState<any[]>([]);
   const [search, setSearch] = useState('');
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(
+    () => sessionStorage.getItem(PLAYER_CREATE_MODAL_STATE_KEY) === '1'
+  );
   const [editingPlayer, setEditingPlayer] = useState<PlayerWithMeta | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -80,16 +84,25 @@ export function Players() {
   };
 
   const handleEdit = (player: PlayerWithMeta) => {
+    sessionStorage.removeItem(PLAYER_CREATE_MODAL_STATE_KEY);
     setEditingPlayer(player);
     setIsModalOpen(true);
   };
 
   const handleCreate = () => {
+    sessionStorage.setItem(PLAYER_CREATE_MODAL_STATE_KEY, '1');
     setEditingPlayer(null);
     setIsModalOpen(true);
   };
 
+  const handleCloseModal = () => {
+    sessionStorage.removeItem(PLAYER_CREATE_MODAL_STATE_KEY);
+    setIsModalOpen(false);
+    setEditingPlayer(null);
+  };
+
   const handleSave = () => {
+    sessionStorage.removeItem(PLAYER_CREATE_MODAL_STATE_KEY);
     fetchPlayers();
     setIsModalOpen(false);
     setEditingPlayer(null);
@@ -246,7 +259,7 @@ export function Players() {
 
       <PlayerFormModal 
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        onClose={handleCloseModal}
         initialData={editingPlayer}
         onSaved={handleSave}
         teams={teams}

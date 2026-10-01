@@ -40,6 +40,25 @@ const emptyPlayer: Player = {
   status: 'active'
 };
 
+const PLAYER_CREATE_DRAFT_KEY = 'doutrinahud_player_create_draft';
+
+function readStoredPlayerDraft() {
+  try {
+    const stored = sessionStorage.getItem(PLAYER_CREATE_DRAFT_KEY);
+    return stored ? normalizePlayerFormData(JSON.parse(stored)) : emptyPlayer;
+  } catch {
+    return emptyPlayer;
+  }
+}
+
+function storePlayerDraft(player: Player) {
+  try {
+    sessionStorage.setItem(PLAYER_CREATE_DRAFT_KEY, JSON.stringify(player));
+  } catch {
+    // Imagens muito grandes podem ultrapassar o limite do sessionStorage.
+  }
+}
+
 function normalizePlayerFormData(player?: Partial<Player> | null): Player {
   return {
     id: player?.id,
@@ -63,13 +82,21 @@ export function PlayerFormModal({ isOpen, onClose, onSaved, initialData, teams }
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    setFormData(normalizePlayerFormData(initialData));
+    if (!isOpen) return;
+    setFormData(initialData ? normalizePlayerFormData(initialData) : readStoredPlayerDraft());
   }, [initialData, isOpen]);
 
   if (!isOpen) return null;
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const nextFormData = { ...formData, [e.target.name]: e.target.value };
+    setFormData(nextFormData);
+    if (!initialData) storePlayerDraft(nextFormData);
+  };
+
+  const handleClose = () => {
+    if (!initialData) sessionStorage.removeItem(PLAYER_CREATE_DRAFT_KEY);
+    onClose();
   };
 
   const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -81,7 +108,9 @@ export function PlayerFormModal({ isOpen, onClose, onSaved, initialData, teams }
       }
       const reader = new FileReader();
       reader.onloadend = () => {
-        setFormData({ ...formData, avatar: reader.result as string });
+        const nextFormData = { ...formData, avatar: reader.result as string };
+        setFormData(nextFormData);
+        if (!initialData) storePlayerDraft(nextFormData);
       };
       reader.readAsDataURL(file);
     }
@@ -116,6 +145,7 @@ export function PlayerFormModal({ isOpen, onClose, onSaved, initialData, teams }
           initialData?.id
         );
 
+        sessionStorage.removeItem(PLAYER_CREATE_DRAFT_KEY);
         onSaved();
         return;
       }
@@ -130,6 +160,7 @@ export function PlayerFormModal({ isOpen, onClose, onSaved, initialData, teams }
       });
 
       if (res.ok) {
+        sessionStorage.removeItem(PLAYER_CREATE_DRAFT_KEY);
         onSaved();
         // onClose is handled by onSaved in parent
       } else {
@@ -156,7 +187,7 @@ export function PlayerFormModal({ isOpen, onClose, onSaved, initialData, teams }
           </h2>
           <button 
             type="button"
-            onClick={onClose} 
+            onClick={handleClose}
             className="text-neutral-400 hover:text-white p-1 hover:bg-neutral-800 rounded transition-colors"
           >
             <X className="w-5 h-5" />
@@ -311,7 +342,7 @@ export function PlayerFormModal({ isOpen, onClose, onSaved, initialData, teams }
         <div className="flex items-center justify-end gap-3 p-5 border-t border-neutral-800 shrink-0 bg-neutral-900/50">
           <button 
             type="button" 
-            onClick={onClose} 
+            onClick={handleClose}
             className="px-5 py-2.5 text-sm font-medium text-neutral-300 hover:text-white hover:bg-neutral-800 rounded-lg transition-colors"
           >
             Cancelar

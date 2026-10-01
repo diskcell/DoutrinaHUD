@@ -37,6 +37,25 @@ const emptyTeam: Team = {
   hltv_url: ''
 };
 
+const TEAM_CREATE_DRAFT_KEY = 'doutrinahud_team_create_draft';
+
+function readStoredTeamDraft() {
+  try {
+    const stored = sessionStorage.getItem(TEAM_CREATE_DRAFT_KEY);
+    return stored ? normalizeTeamFormData(JSON.parse(stored)) : emptyTeam;
+  } catch {
+    return emptyTeam;
+  }
+}
+
+function storeTeamDraft(team: Team) {
+  try {
+    sessionStorage.setItem(TEAM_CREATE_DRAFT_KEY, JSON.stringify(team));
+  } catch {
+    // Imagens muito grandes podem ultrapassar o limite do sessionStorage.
+  }
+}
+
 function normalizeTeamFormData(team?: Partial<Team> | null): Team {
   return {
     id: team?.id,
@@ -58,13 +77,21 @@ export function TeamFormModal({ isOpen, onClose, onSaved, initialData }: Props) 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    setFormData(normalizeTeamFormData(initialData));
+    if (!isOpen) return;
+    setFormData(initialData ? normalizeTeamFormData(initialData) : readStoredTeamDraft());
   }, [initialData, isOpen]);
 
   if (!isOpen) return null;
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const nextFormData = { ...formData, [e.target.name]: e.target.value };
+    setFormData(nextFormData);
+    if (!initialData) storeTeamDraft(nextFormData);
+  };
+
+  const handleClose = () => {
+    if (!initialData) sessionStorage.removeItem(TEAM_CREATE_DRAFT_KEY);
+    onClose();
   };
 
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -76,7 +103,9 @@ export function TeamFormModal({ isOpen, onClose, onSaved, initialData }: Props) 
       }
       const reader = new FileReader();
       reader.onloadend = () => {
-        setFormData({ ...formData, logo: reader.result as string });
+        const nextFormData = { ...formData, logo: reader.result as string };
+        setFormData(nextFormData);
+        if (!initialData) storeTeamDraft(nextFormData);
       };
       reader.readAsDataURL(file);
     }
@@ -109,6 +138,7 @@ export function TeamFormModal({ isOpen, onClose, onSaved, initialData }: Props) 
           initialData?.id
         );
 
+        sessionStorage.removeItem(TEAM_CREATE_DRAFT_KEY);
         onSaved();
         onClose();
         return;
@@ -127,6 +157,7 @@ export function TeamFormModal({ isOpen, onClose, onSaved, initialData }: Props) 
         body: JSON.stringify(formData)
       });
       if (res.ok) {
+        sessionStorage.removeItem(TEAM_CREATE_DRAFT_KEY);
         onSaved();
         onClose();
       } else {
@@ -153,7 +184,7 @@ export function TeamFormModal({ isOpen, onClose, onSaved, initialData }: Props) 
             {initialData ? 'Editar Time' : 'Novo Time'}
           </h2>
           <button 
-            onClick={onClose} 
+            onClick={handleClose}
             className="text-neutral-400 hover:text-white p-1 hover:bg-neutral-800 rounded transition-colors"
           >
             <X className="w-5 h-5" />
@@ -290,7 +321,7 @@ export function TeamFormModal({ isOpen, onClose, onSaved, initialData }: Props) 
         <div className="flex items-center justify-end gap-3 p-5 border-t border-neutral-800 shrink-0 bg-neutral-900/50">
           <button 
             type="button" 
-            onClick={onClose} 
+            onClick={handleClose}
             className="px-5 py-2.5 text-sm font-medium text-neutral-300 hover:text-white hover:bg-neutral-800 rounded-lg transition-colors"
             disabled={loading}
           >

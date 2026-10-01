@@ -11,11 +11,15 @@ interface TeamWithMeta extends Team {
   created_at: string;
 }
 
+const TEAM_CREATE_MODAL_STATE_KEY = 'doutrinahud_team_create_modal_open';
+
 export function Teams() {
   const cloudSession = useOptionalCloudSession();
   const [teams, setTeams] = useState<TeamWithMeta[]>([]);
   const [search, setSearch] = useState('');
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(
+    () => sessionStorage.getItem(TEAM_CREATE_MODAL_STATE_KEY) === '1'
+  );
   const [editingTeam, setEditingTeam] = useState<TeamWithMeta | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [importingTeamId, setImportingTeamId] = useState<number | null>(null);
@@ -61,13 +65,21 @@ export function Teams() {
   };
 
   const handleEdit = (team: TeamWithMeta) => {
+    sessionStorage.removeItem(TEAM_CREATE_MODAL_STATE_KEY);
     setEditingTeam(team);
     setIsModalOpen(true);
   };
 
   const handleCreate = () => {
+    sessionStorage.setItem(TEAM_CREATE_MODAL_STATE_KEY, '1');
     setEditingTeam(null);
     setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    sessionStorage.removeItem(TEAM_CREATE_MODAL_STATE_KEY);
+    setEditingTeam(null);
+    setIsModalOpen(false);
   };
 
   const handleImportHltv = async (team: TeamWithMeta) => {
@@ -261,7 +273,7 @@ export function Teams() {
 
       <TeamFormModal 
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        onClose={handleCloseModal}
         initialData={editingTeam}
         onSaved={fetchTeams}
       />
