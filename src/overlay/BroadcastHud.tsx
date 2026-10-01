@@ -237,7 +237,7 @@ function BroadcastPlayerCard({
           <div className="flex items-center gap-1.5 h-4 mb-1">
             {armor > 0 && (
               <img
-                src={helmet ? '/icons/cs2/armor_helmet.svg' : '/icons/cs2/armor.svg'}
+                src={helmet ? './icons/cs2/armor_helmet.svg' : './icons/cs2/armor.svg'}
                 className="w-4 h-4 brightness-0 invert opacity-85"
               />
             )}

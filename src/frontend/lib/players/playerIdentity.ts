@@ -74,5 +74,5 @@ export function getPlayerAvatar(gsiPlayer: any, registeredPlayers: any[], steamP
     return steamProfile.avatarfull || steamProfile.avatarmedium || steamProfile.avatar;
   }
   
-  return '/icons/cs2/customplayer.svg';
+  return './icons/cs2/customplayer.svg';
 }

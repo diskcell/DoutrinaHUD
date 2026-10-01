@@ -78,7 +78,7 @@ export function BombStateBanner({ gsiState, players }: BombStateBannerProps) {
             {/* Left side: Icon and Label */}
             <div className="flex items-center gap-3 px-4 relative z-10 flex-1 min-w-0">
               <img 
-                src={isDefusing ? "/icons/cs2/defuser.svg" : "/icons/cs2/c4.svg"} 
+                src={isDefusing ? "./icons/cs2/defuser.svg" : "./icons/cs2/c4.svg"}
                 className={cn(
                   "w-7 h-7 drop-shadow-md shrink-0",
                   isDefusing ? "brightness-0 invert" : "animate-pulse"
@@ -153,7 +153,7 @@ export function BombStateBanner({ gsiState, players }: BombStateBannerProps) {
             exit={{ y: -10, opacity: 0 }}
             className="px-6 py-2 bg-neutral-950/90 backdrop-blur-md border border-yellow-500/30 rounded-full flex items-center gap-3 shadow-lg"
           >
-            <img src="/icons/cs2/c4.svg" className="w-4 h-4 opacity-70" onError={(e) => (e.currentTarget.style.display = 'none')} />
+            <img src="./icons/cs2/c4.svg" className="w-4 h-4 opacity-70" onError={(e) => (e.currentTarget.style.display = 'none')} />
             <span className="text-xs font-black text-yellow-500 uppercase tracking-widest">C4 Dropada</span>
           </motion.div>
         )}
@@ -172,7 +172,7 @@ export function BombStateBanner({ gsiState, players }: BombStateBannerProps) {
             )}
           >
             <img 
-              src={isDefused ? "/icons/cs2/defuser.svg" : "/icons/cs2/c4.svg"} 
+              src={isDefused ? "./icons/cs2/defuser.svg" : "./icons/cs2/c4.svg"}
               className={cn("w-10 h-10", isDefused ? "brightness-0 invert drop-shadow-md" : "drop-shadow-lg")} 
               onError={(e) => (e.currentTarget.style.display = 'none')}
             />

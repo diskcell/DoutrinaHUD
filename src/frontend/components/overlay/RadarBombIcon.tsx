@@ -22,7 +22,7 @@ export function RadarBombIcon({ x, y, state }: RadarBombIconProps) {
         state === 'planted' && "animate-pulse"
       )}>
         <img 
-          src="/icons/cs2/c4-red.png" 
+          src="./icons/cs2/c4-red.png"
           alt="C4" 
           className="w-full h-full object-contain"
         />

@@ -23,11 +23,11 @@ const TYPE_COLORS: Record<string, string> = {
 };
 
 const TYPE_ICONS: Record<string, string> = {
-  smoke: '/icons/cs2/smokegrenade.svg',
-  flash: '/icons/cs2/flashbang.svg',
-  he: '/icons/cs2/hegrenade.svg',
-  molotov: '/icons/cs2/molotov.svg',
-  decoy: '/icons/cs2/decoy.svg',
+  smoke: './icons/cs2/smokegrenade.svg',
+  flash: './icons/cs2/flashbang.svg',
+  he: './icons/cs2/hegrenade.svg',
+  molotov: './icons/cs2/molotov.svg',
+  decoy: './icons/cs2/decoy.svg',
 };
 
 function getGrenadeOwnerId(grenade: any) {

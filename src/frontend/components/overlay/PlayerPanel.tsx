@@ -62,21 +62,21 @@ export function PlayerPanel({ player, isRightSide, isObserved, isAutoMode }: any
              </span>
              {c4 && (
                <img 
-                 src="/icons/cs2/c4.svg" 
+                 src="./icons/cs2/c4.svg"
                  className="w-5 h-5 animate-pulse drop-shadow-[0_0_5px_rgba(239,68,68,0.5)]" 
                  onError={(e) => (e.currentTarget.style.display = 'none')}
                />
              )}
              {defuseKit && (
                <img 
-                 src="/icons/cs2/defuser.svg" 
+                 src="./icons/cs2/defuser.svg"
                  className="w-5 h-5 brightness-0 invert opacity-80" 
                  onError={(e) => (e.currentTarget.style.display = 'none')}
                />
              )}
              {armor > 0 && (
                <img 
-                 src={helmet ? "/icons/cs2/armor_helmet.svg" : "/icons/cs2/armor.svg"} 
+                 src={helmet ? "./icons/cs2/armor_helmet.svg" : "./icons/cs2/armor.svg"}
                  className="w-4 h-4 brightness-0 invert opacity-40" 
                  onError={(e) => (e.currentTarget.style.display = 'none')}
                />

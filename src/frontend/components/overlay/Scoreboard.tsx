@@ -96,7 +96,7 @@ export function Scoreboard({ match, timerDisplay, timerPhase, round, autoMode, g
               className="absolute inset-0 flex items-center justify-center gap-2"
             >
               <img 
-                src="/icons/cs2/c4.svg" 
+                src="./icons/cs2/c4.svg"
                 className="w-8 h-8 animate-pulse" 
                 onError={(e) => (e.currentTarget.style.display = 'none')}
               />
@@ -105,7 +105,7 @@ export function Scoreboard({ match, timerDisplay, timerPhase, round, autoMode, g
           ) : timerPhase === 'defuse' ? (
             <div className="absolute inset-0 bg-blue-600 flex items-center justify-center gap-2">
               <img 
-                src="/icons/cs2/defuser.svg" 
+                src="./icons/cs2/defuser.svg"
                 className="w-8 h-8 brightness-0 invert" 
                 onError={(e) => (e.currentTarget.style.display = 'none')}
               />

@@ -30,7 +30,7 @@ export function PlayerPortrait({ avatar, isDead, className, isLarge, transparent
         />
       ) : (
         <img 
-          src="/icons/cs2/customplayer.svg" 
+          src="./icons/cs2/customplayer.svg"
           alt="Player Placeholder" 
           className={cn(
             "w-full h-full object-contain opacity-20 brightness-0 invert",

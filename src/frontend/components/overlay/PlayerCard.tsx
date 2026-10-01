@@ -24,10 +24,21 @@ export function PlayerCard({ player, isRightSide, isObserved }: PlayerCardProps)
   const isLowHP = health > 0 && health <= 25;
   
   // Weapons logic
-  const weapons = Object.values<{name: string, type: string, state: string}>(p.weapons || {});
+  const weapons = Object.values<any>(p.weapons || {});
   const activeWeapon = weapons.find(w => w.state === 'active');
-  const grenades = weapons.filter(w => w.type === 'Grenade');
+  const grenades = weapons.filter(w => String(w.type || '').toLowerCase().includes('grenade'));
   const c4 = weapons.find(w => w.type === 'C4' || w.name === 'weapon_c4');
+  const activeWeaponType = String(activeWeapon?.type || '').toLowerCase();
+  const activeWeaponName = String(activeWeapon?.name || '').toLowerCase();
+  const ammoClip = Number(activeWeapon?.ammo_clip);
+  const ammoReserve = Number(activeWeapon?.ammo_reserve);
+  const showAmmo = Boolean(activeWeapon) &&
+    Number.isFinite(ammoClip) && ammoClip >= 0 &&
+    !activeWeaponType.includes('grenade') &&
+    activeWeaponType !== 'knife' &&
+    activeWeaponType !== 'c4' &&
+    !activeWeaponName.includes('knife') &&
+    !activeWeaponName.includes('c4');
 
   // Side-specific colors
   const teamColorHex = isCT ? '#3b82f6' : '#f97316';
@@ -116,15 +127,15 @@ export function PlayerCard({ player, isRightSide, isObserved }: PlayerCardProps)
           <div className="flex items-center gap-1.5 opacity-80">
              {armor > 0 && (
                <img 
-                 src={helmet ? "/icons/cs2/armor_helmet.svg" : "/icons/cs2/armor.svg"} 
+                 src={helmet ? "./icons/cs2/armor_helmet.svg" : "./icons/cs2/armor.svg"}
                  className="w-4 h-4 brightness-0 invert" 
                />
              )}
              {defuseKit && (
-               <img src="/icons/cs2/defuser.svg" className="w-4 h-4 brightness-0 invert" />
+               <img src="./icons/cs2/defuser.svg" className="w-4 h-4 brightness-0 invert" />
              )}
              {c4 && (
-               <img src="/icons/cs2/c4.svg" className="w-4 h-4 animate-pulse" />
+               <img src="./icons/cs2/c4.svg" className="w-4 h-4 animate-pulse" />
              )}
           </div>
 
@@ -143,17 +154,23 @@ export function PlayerCard({ player, isRightSide, isObserved }: PlayerCardProps)
 
       {/* Weapons & Utility Strip */}
       <div className={cn(
-        "w-22 flex flex-col items-center justify-center gap-1 bg-black/30 border-white/5 shrink-0",
+        "w-24 flex flex-col items-center justify-center gap-1 bg-black/30 border-white/5 shrink-0 px-1.5",
         isRightSide ? "border-r" : "border-l"
       )}>
         {/* Active Weapon Icon */}
-        <div className="h-7 flex items-center justify-center px-2">
+        <div className="h-7 w-full flex items-center justify-center gap-1.5">
           {activeWeapon && (
             <img 
               src={getWeaponIcon(activeWeapon.name)} 
-              className="h-full w-auto object-contain brightness-0 invert drop-shadow-lg"
+              className="h-5 max-w-[52px] flex-1 object-contain brightness-0 invert drop-shadow-lg"
               onError={(e) => (e.currentTarget.style.display = 'none')}
             />
+          )}
+          {showAmmo && (
+            <span className="shrink-0 font-black text-white text-[11px] leading-none tabular-nums">
+              {ammoClip}
+              <span className="text-[8px] text-white/35 ml-0.5">/{Number.isFinite(ammoReserve) ? ammoReserve : 0}</span>
+            </span>
           )}
         </div>
 

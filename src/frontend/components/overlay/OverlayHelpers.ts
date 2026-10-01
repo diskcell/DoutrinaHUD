@@ -105,9 +105,9 @@ export function getWeaponIcon(name: string) {
   };
 
   if (clean.startsWith('knife') || clean.includes('bayonet')) {
-    return `/icons/cs2/${clean}.svg`;
+    return `./icons/cs2/${clean}.svg`;
   }
 
   const iconName = iconMap[clean] || clean;
-  return `/icons/cs2/${iconName}.svg`;
+  return `./icons/cs2/${iconName}.svg`;
 }
