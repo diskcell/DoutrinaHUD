@@ -1,6 +1,9 @@
 import { requireSupabase, supabaseProjectUrl } from '../../lib/supabase';
 import { getCloudAssetUrl } from './cloudAssets';
 
+const ACTIVE_CLOUD_LIVE_SESSION_KEY = 'doutrinahud_active_live_session';
+export const ACTIVE_CLOUD_LIVE_SESSION_EVENT = 'doutrinahud:active-live-session-change';
+
 export interface CloudLiveSession {
   id: string;
   token: string;
@@ -17,6 +20,25 @@ export interface CloudLiveBootstrap {
   lastSeenAt: string | null;
   expiresAt: string;
   players: Array<Record<string, unknown>>;
+}
+
+export function getActiveCloudLiveSessionId() {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem(ACTIVE_CLOUD_LIVE_SESSION_KEY);
+}
+
+export function setActiveCloudLiveSessionId(publicId: string) {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(ACTIVE_CLOUD_LIVE_SESSION_KEY, publicId);
+  window.dispatchEvent(new CustomEvent(ACTIVE_CLOUD_LIVE_SESSION_EVENT));
+}
+
+export function clearActiveCloudLiveSessionId(expectedPublicId?: string) {
+  if (typeof window === 'undefined') return;
+  const activeId = getActiveCloudLiveSessionId();
+  if (expectedPublicId && activeId !== expectedPublicId) return;
+  localStorage.removeItem(ACTIVE_CLOUD_LIVE_SESSION_KEY);
+  window.dispatchEvent(new CustomEvent(ACTIVE_CLOUD_LIVE_SESSION_EVENT));
 }
 
 function randomToken(byteLength: number) {

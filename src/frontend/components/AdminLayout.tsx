@@ -6,13 +6,14 @@ import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { isSupabaseConfigured, requireSupabase } from '../../lib/supabase';
 import { useOptionalCloudSession } from '../context/CloudSessionContext';
+import { clearActiveCloudLiveSessionId } from '../lib/cloudLive';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
 export function AdminLayout() {
-  const { connected, sessionId } = useSocket();
+  const { connected, sessionId, transport } = useSocket();
   const location = useLocation();
   const cloudSession = useOptionalCloudSession();
   const [account, setAccount] = useState<{ displayName: string; workspaceName: string } | null>(null);
@@ -28,6 +29,7 @@ export function AdminLayout() {
   ];
 
   const handleLogout = async () => {
+    clearActiveCloudLiveSessionId();
     if (isSupabaseConfigured) {
       await requireSupabase().auth.signOut();
     } else {
@@ -95,7 +97,9 @@ export function AdminLayout() {
           <div className="flex items-center gap-3 text-sm px-2">
             <div className={cn("w-2 h-2 rounded-full", connected ? "bg-emerald-500" : "bg-red-500")} />
             <span className="text-neutral-400">
-              {connected ? 'Servidor Conectado' : 'Desconectado'}
+              {connected
+                ? transport === 'supabase' ? 'Sessao Conectada' : 'Servidor Conectado'
+                : sessionId === 'local' ? 'Sem sessao ativa' : 'Conectando sessao'}
             </span>
           </div>
           <Link

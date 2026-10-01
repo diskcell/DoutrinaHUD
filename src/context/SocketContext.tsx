@@ -8,7 +8,12 @@ import {
 import type { ReactNode } from 'react';
 import { io } from 'socket.io-client';
 import { isSupabaseConfigured, requireSupabase, supabaseProjectUrl } from '../lib/supabase';
-import { loadCloudLiveBootstrap, updateCloudLiveHudState } from '../frontend/lib/cloudLive';
+import {
+  ACTIVE_CLOUD_LIVE_SESSION_EVENT,
+  getActiveCloudLiveSessionId,
+  loadCloudLiveBootstrap,
+  updateCloudLiveHudState,
+} from '../frontend/lib/cloudLive';
 
 type SocketHandler = (payload: any) => void;
 
@@ -81,7 +86,9 @@ function getSocketUrl() {
 }
 
 function getSessionId() {
-  return getUrlParams().get('session') || 'local';
+  return getUrlParams().get('session')
+    || (isSupabaseConfigured ? getActiveCloudLiveSessionId() : null)
+    || 'local';
 }
 
 export function SocketProvider({ children }: { children: ReactNode }) {
@@ -95,10 +102,12 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     const syncSessionFromUrl = () => setSessionId(getSessionId());
     window.addEventListener('hashchange', syncSessionFromUrl);
     window.addEventListener('popstate', syncSessionFromUrl);
+    window.addEventListener(ACTIVE_CLOUD_LIVE_SESSION_EVENT, syncSessionFromUrl);
 
     return () => {
       window.removeEventListener('hashchange', syncSessionFromUrl);
       window.removeEventListener('popstate', syncSessionFromUrl);
+      window.removeEventListener(ACTIVE_CLOUD_LIVE_SESSION_EVENT, syncSessionFromUrl);
     };
   }, []);
 

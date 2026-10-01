@@ -4,9 +4,11 @@ import { useSocket } from '../../context/SocketContext';
 import { isSupabaseConfigured } from '../../lib/supabase';
 import { useOptionalCloudSession } from '../context/CloudSessionContext';
 import {
+  clearActiveCloudLiveSessionId,
   cloudLiveSessionExists,
   createCloudLiveSession,
   getCloudGsiEndpoint,
+  setActiveCloudLiveSessionId,
 } from '../lib/cloudLive';
 import { getStoredActiveOverlayId } from '../lib/overlayModels';
 
@@ -89,12 +91,13 @@ function createOnlineGsiConfig(session: OnlineSession, endpoint: string) {
 }
 
 export function Dashboard() {
-  const { connected } = useSocket();
+  const { socket, connected, sessionId } = useSocket();
   const cloudSession = useOptionalCloudSession();
   const [onlineSession, setOnlineSession] = useState<OnlineSession | null>(null);
   const [storageKey, setStorageKey] = useState<string | null>(null);
   const [creatingSession, setCreatingSession] = useState(false);
   const [copiedValue, setCopiedValue] = useState<string | null>(null);
+  const [receivingGsi, setReceivingGsi] = useState(false);
 
   const copyValue = async (value: string, label: string) => {
     await navigator.clipboard.writeText(value);
@@ -111,6 +114,7 @@ export function Dashboard() {
       setStorageKey(key);
 
       if (!savedSession) {
+        clearActiveCloudLiveSessionId();
         setOnlineSession(null);
         return () => {
           isMounted = false;
@@ -122,13 +126,17 @@ export function Dashboard() {
           if (!isMounted) return;
           if (exists) {
             setOnlineSession(savedSession);
+            setActiveCloudLiveSessionId(savedSession.id);
           } else {
             localStorage.removeItem(key);
+            clearActiveCloudLiveSessionId(savedSession.id);
             setOnlineSession(null);
           }
         })
         .catch(() => {
-          if (isMounted) setOnlineSession(null);
+          if (isMounted) {
+            setOnlineSession(null);
+          }
         });
 
       return () => {
@@ -150,6 +158,27 @@ export function Dashboard() {
       isMounted = false;
     };
   }, [cloudSession]);
+
+  useEffect(() => {
+    if (!socket || !connected || !onlineSession || sessionId !== onlineSession.id) {
+      setReceivingGsi(false);
+      return;
+    }
+
+    let inactivityTimer: number | undefined;
+    const handleGsiUpdate = () => {
+      setReceivingGsi(true);
+      if (inactivityTimer) window.clearTimeout(inactivityTimer);
+      inactivityTimer = window.setTimeout(() => setReceivingGsi(false), 3000);
+    };
+
+    socket.on('gsi:update', handleGsiUpdate);
+
+    return () => {
+      socket.off('gsi:update', handleGsiUpdate);
+      if (inactivityTimer) window.clearTimeout(inactivityTimer);
+    };
+  }, [connected, onlineSession, sessionId, socket]);
 
   const downloadGsiConfig = () => {
     if (!onlineSession) return;
@@ -190,6 +219,7 @@ export function Dashboard() {
 
       if (storageKey) window.localStorage.setItem(storageKey, JSON.stringify(session));
       setOnlineSession(session);
+      if (isSupabaseConfigured) setActiveCloudLiveSessionId(session.id);
     } catch (error) {
       console.error(error);
       alert('Nao foi possivel criar a sessao online. Verifique se a estrutura do Supabase foi instalada.');
@@ -238,6 +268,14 @@ export function Dashboard() {
                 {onlineSession ? (
                   <>
                     Sessao pronta: <span className="font-mono text-neutral-200">{onlineSession.id}</span>
+                    <span className={connected ? 'text-emerald-400' : 'text-amber-400'}>
+                      {connected ? ' · Realtime conectado' : ' · Conectando ao Realtime'}
+                    </span>
+                    {connected && (
+                      <span className={receivingGsi ? 'text-emerald-400' : 'text-neutral-500'}>
+                        {receivingGsi ? ' · CS2 transmitindo' : ' · Aguardando CS2'}
+                      </span>
+                    )}
                   </>
                 ) : (
                   <span className={connected ? 'text-emerald-400' : 'text-neutral-400'}>
