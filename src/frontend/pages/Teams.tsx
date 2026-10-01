@@ -115,10 +115,14 @@ export function Teams() {
         if (!data?.success) throw new Error(data?.error || 'Erro ao importar jogadores do HLTV.');
 
         const withoutAvatar = data.players.filter((player: any) => !player.avatar_path).length;
+        const removedPlayers = Number(data.removedPlayers || 0);
         alert(
           `HLTV importado: ${data.players.length} jogadores processados.` +
             (withoutAvatar > 0
               ? `\n${withoutAvatar} jogador(es) vieram sem foto.`
+              : '') +
+            (removedPlayers > 0
+              ? `\n${removedPlayers} jogador(es) de importacoes antigas foram removidos.`
               : '')
         );
         await fetchTeams();

@@ -136,37 +136,42 @@ function extractReaderRoster(markdown: string) {
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean);
-  const rosterHeading = lines.findIndex((line) => /^#{0,3}\s*(roster|players)$/i.test(line));
   const signInIndex = lines.findIndex((line) => line.toLowerCase() === 'sign in');
-  const startIndex = rosterHeading >= 0 ? rosterHeading + 1 : signInIndex >= 0 ? signInIndex + 1 : 0;
+  if (signInIndex < 0) return [];
+
   const roster: RosterPlayer[] = [];
   const ignored = new Set([
     'brazil', 'europe', 'north america', 'south america', 'cis', 'coach', 'info',
     'roster', 'players', 'matches', 'events', 'results', 'statistics', 'news',
   ]);
 
-  for (const line of lines.slice(startIndex)) {
+  // No texto do Jina Reader, o elenco atual aparece imediatamente depois de
+  // "Sign in". A palavra "Roster" encontrada mais abaixo pertence ao menu da
+  // pagina e nao pode ser usada como inicio da lista.
+  for (const line of lines.slice(signInIndex + 1, signInIndex + 13)) {
     const clean = line.replace(/^[-*]\s*/, '').trim();
     const normalized = clean.toLowerCase();
 
     if (!clean || ignored.has(normalized) || normalized.startsWith('#')) continue;
-    if (
-      clean.length > 24 ||
-      clean.includes(' ') ||
-      /[:\[\]()]/.test(clean) ||
-      /ranking|timezone|settings|filter/i.test(clean)
-    ) continue;
+    if (!/^[\p{L}\p{N}_.\-']{1,24}$/u.test(clean)) continue;
 
     roster.push({ id: null, url: null, nickname: clean });
     if (roster.length >= 5) break;
   }
 
-  return roster;
+  return roster.length === 5 ? roster : [];
 }
 
 function extractPlayerLinks(teamText: string) {
+  if (/^URL Source:\s*https?:\/\/www\.hltv\.org\/team\//im.test(teamText)) {
+    const readerRoster = extractReaderRoster(teamText);
+    if (readerRoster.length === 5) return readerRoster;
+  }
+
   const linked = extractLinkedPlayers(teamText);
-  return linked.length ? linked : extractReaderRoster(teamText);
+  if (linked.length === 5) return linked;
+
+  return extractReaderRoster(teamText);
 }
 
 function extractMetaContent(html: string, property: string) {
@@ -254,6 +259,15 @@ async function fetchHltvText(url: string) {
   }
 
   return fetchReaderText(url);
+}
+
+async function fetchTeamText(url: string) {
+  try {
+    return await fetchReaderText(url);
+  } catch (error) {
+    console.warn('Leitor alternativo indisponivel para o time; tentando HTML direto.', error);
+    return fetchHltvText(url);
+  }
 }
 
 async function searchHltvPlayer(nickname: string, teamName: string, playerId: string | null) {
@@ -367,17 +381,26 @@ async function requireUser(request: Request) {
 }
 
 async function findExistingPlayer(workspaceId: string, teamId: number, hltvPlayerId: string | null, nickname: string) {
-  let query = admin
+  if (hltvPlayerId) {
+    const { data, error } = await admin
+      .from('players')
+      .select('id, avatar_path')
+      .eq('workspace_id', workspaceId)
+      .eq('hltv_player_id', hltvPlayerId)
+      .limit(1)
+      .maybeSingle();
+    if (error) throw error;
+    if (data) return data;
+  }
+
+  const { data, error } = await admin
     .from('players')
     .select('id, avatar_path')
     .eq('workspace_id', workspaceId)
-    .limit(1);
-
-  query = hltvPlayerId
-    ? query.eq('hltv_player_id', hltvPlayerId)
-    : query.eq('team_id', teamId).ilike('nickname', nickname);
-
-  const { data, error } = await query.maybeSingle();
+    .eq('team_id', teamId)
+    .ilike('nickname', nickname)
+    .limit(1)
+    .maybeSingle();
   if (error) throw error;
   return data;
 }
@@ -430,13 +453,13 @@ Deno.serve(async (request: Request) => {
       return jsonResponse({ success: false, error: 'Voce nao tem permissao para editar este time.' }, 403);
     }
 
-    const teamText = await fetchHltvText(hltvUrl);
+    const teamText = await fetchTeamText(hltvUrl);
     const roster = extractPlayerLinks(teamText);
 
-    if (!roster.length) {
+    if (roster.length !== 5) {
       return jsonResponse({
         success: false,
-        error: 'Nao encontrei o elenco atual na pagina da HLTV. Confira o link e tente novamente.',
+        error: 'Nao foi possivel confirmar os cinco jogadores do elenco atual. Nenhum jogador foi alterado.',
       }, 422);
     }
 
@@ -518,6 +541,29 @@ Deno.serve(async (request: Request) => {
       });
     }
 
+    const importedIds = importedPlayers.map((player) => player.id);
+    const { data: previousImports, error: previousImportsError } = await admin
+      .from('players')
+      .select('id')
+      .eq('workspace_id', team.workspace_id)
+      .eq('team_id', team.id)
+      .not('hltv_synced_at', 'is', null);
+    if (previousImportsError) throw previousImportsError;
+
+    const obsoleteIds = (previousImports || [])
+      .map((player) => player.id)
+      .filter((id) => !importedIds.includes(id));
+
+    if (obsoleteIds.length) {
+      const { error: cleanupError } = await admin
+        .from('players')
+        .delete()
+        .eq('workspace_id', team.workspace_id)
+        .eq('team_id', team.id)
+        .in('id', obsoleteIds);
+      if (cleanupError) throw cleanupError;
+    }
+
     const { error: updateTeamError } = await admin
       .from('teams')
       .update({
@@ -529,7 +575,13 @@ Deno.serve(async (request: Request) => {
       .eq('workspace_id', team.workspace_id);
     if (updateTeamError) throw updateTeamError;
 
-    return jsonResponse({ success: true, teamId: team.id, hltvUrl, players: importedPlayers });
+    return jsonResponse({
+      success: true,
+      teamId: team.id,
+      hltvUrl,
+      players: importedPlayers,
+      removedPlayers: obsoleteIds.length,
+    });
   } catch (error) {
     console.error('Falha na importacao HLTV:', error);
 
