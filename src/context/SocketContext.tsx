@@ -125,6 +125,38 @@ export function SocketProvider({ children }: { children: ReactNode }) {
         handlers.get(event)?.forEach((handler) => handler(payload));
       };
 
+      let queuedHudState: unknown | undefined;
+      let syncingHudState = false;
+
+      const flushHudState = async () => {
+        if (syncingHudState) return;
+        syncingHudState = true;
+
+        try {
+          while (queuedHudState !== undefined) {
+            const nextHudState = queuedHudState;
+            queuedHudState = undefined;
+
+            try {
+              await updateCloudLiveHudState(sessionId, nextHudState);
+              await channel.send({
+                type: 'broadcast',
+                event: 'hud:update',
+                payload: nextHudState,
+              });
+            } catch (error) {
+              console.error('Falha ao sincronizar a HUD:', error);
+            }
+          }
+        } finally {
+          syncingHudState = false;
+
+          if (queuedHudState !== undefined) {
+            void flushHudState();
+          }
+        }
+      };
+
       const adapter: SocketLike = {
         on(event, handler) {
           const eventHandlers = handlers.get(event) || new Set<SocketHandler>();
@@ -149,13 +181,8 @@ export function SocketProvider({ children }: { children: ReactNode }) {
           }
 
           if (event === 'hud:command') {
-            updateCloudLiveHudState(sessionId, payload)
-              .then(() => channel.send({
-                type: 'broadcast',
-                event: 'hud:update',
-                payload,
-              }))
-              .catch((error) => console.error('Falha ao sincronizar a HUD:', error));
+            queuedHudState = payload;
+            void flushHudState();
             return adapter;
           }
 

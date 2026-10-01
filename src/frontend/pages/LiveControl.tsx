@@ -21,6 +21,7 @@ import { useSocket } from '../../context/SocketContext';
 import { isSupabaseConfigured } from '../../lib/supabase';
 import { useOptionalCloudSession } from '../context/CloudSessionContext';
 import { listCloudTeams } from '../lib/cloudData';
+import { loadCloudLiveBootstrap } from '../lib/cloudLive';
 
 const MOCK_TEAMS = [
   { id: 1, name: 'FURIA Esports', tag: 'FUR', logo: '' },
@@ -59,10 +60,14 @@ const MAPS = [
 ];
 
 export function LiveControl() {
-  const { socket, connected, transport } = useSocket();
+  const { socket, connected, transport, sessionId } = useSocket();
   const cloudSession = useOptionalCloudSession();
 
-  const [teams, setTeams] = useState<any[]>(MOCK_TEAMS);
+  const [teams, setTeams] = useState<any[]>(() =>
+    isSupabaseConfigured ? [] : MOCK_TEAMS
+  );
+  const [teamsLoaded, setTeamsLoaded] = useState(false);
+  const [hudHydrated, setHudHydrated] = useState(false);
 
   /*
    ============================================================
@@ -102,13 +107,15 @@ export function LiveControl() {
   useEffect(() => {
     if (!socket || !connected) return;
 
+    let cancelled = false;
+
     const handleInitialSync = (data: any) => {
-      if (data && data.match) {
+      if (!cancelled && data && data.match) {
         console.log('Recuperando estado anterior:', data.match);
         const m = data.match;
         
-        if (m.teamHome) setTeamHomeId(Number(m.teamHome.id));
-        if (m.teamAway) setTeamAwayId(Number(m.teamAway.id));
+        setTeamHomeId(m.teamHome?.id ? Number(m.teamHome.id) : '');
+        setTeamAwayId(m.teamAway?.id ? Number(m.teamAway.id) : '');
         
         if (m.scoreHome !== undefined) setScoreHome(m.scoreHome);
         if (m.scoreAway !== undefined) setScoreAway(m.scoreAway);
@@ -122,19 +129,46 @@ export function LiveControl() {
         if (m.sideHome) setSideHome(m.sideHome);
         if (m.matchStatus) {
           setMatchStatus(m.matchStatus);
-          setManualStatusOverride(m.matchStatus !== 'Live');
+          setManualStatusOverride(
+            data.manualStatusOverride !== undefined
+              ? Boolean(data.manualStatusOverride)
+              : m.matchStatus !== 'Live'
+          );
         }
         if (data.autoMode !== undefined) setAutoMode(data.autoMode);
       }
+
+      if (!cancelled) setHudHydrated(true);
     };
+
+    if (transport === 'supabase' && sessionId !== 'local') {
+      setHudHydrated(false);
+
+      loadCloudLiveBootstrap(sessionId)
+        .then((bootstrap) => {
+          if (cancelled) return;
+          if (bootstrap?.latestHudState) {
+            handleInitialSync(bootstrap.latestHudState);
+          }
+          setHudHydrated(true);
+        })
+        .catch((error) => {
+          console.error('Falha ao recuperar configuracao da partida:', error);
+        });
+
+      return () => {
+        cancelled = true;
+      };
+    }
 
     socket.on('hud:update', handleInitialSync);
     socket.emit('overlay:ready');
 
     return () => {
+      cancelled = true;
       socket.off('hud:update', handleInitialSync);
     };
-  }, [socket, connected]);
+  }, [socket, connected, transport, sessionId]);
 
   /*
    ============================================================
@@ -233,11 +267,18 @@ export function LiveControl() {
 
   useEffect(() => {
     if (isSupabaseConfigured && cloudSession) {
+      setTeamsLoaded(false);
+      setTeams([]);
+
       listCloudTeams(cloudSession.workspaceId)
         .then((data) => {
-          if (data.length > 0) setTeams(data);
+          setTeams(data);
+          setTeamsLoaded(true);
         })
-        .catch((error) => console.error('Erro ao carregar times do Supabase:', error));
+        .catch((error) => {
+          setTeamsLoaded(false);
+          console.error('Erro ao carregar times do Supabase:', error);
+        });
       return;
     }
 
@@ -247,8 +288,9 @@ export function LiveControl() {
         if (Array.isArray(data) && data.length > 0) {
           setTeams(data);
         }
+        setTeamsLoaded(true);
       })
-      .catch(() => {});
+      .catch(() => setTeamsLoaded(true));
   }, [cloudSession]);
 
   /*
@@ -322,6 +364,7 @@ export function LiveControl() {
 
   const handleSyncOverlay = () => {
     if (!socket || !connected) return;
+    if (!teamsLoaded || !hudHydrated) return;
 
     const teamLeft = teams.find(
       (t) => t.id === Number(teamHomeId)
@@ -335,6 +378,7 @@ export function LiveControl() {
       type: 'SYNC',
       forceUpdate: true,
       autoMode,
+      manualStatusOverride,
 
       match: {
         teamHome: teamLeft || null,
@@ -403,9 +447,18 @@ export function LiveControl() {
   */
 
   useEffect(() => {
+    if (!teamsLoaded || !hudHydrated) {
+      return;
+    }
+
     handleSyncOverlay();
   }, [
     connected,
+    transport,
+    sessionId,
+    teamsLoaded,
+    hudHydrated,
+    teams,
     scoreHome,
     scoreAway,
     scoreSeriesHome,
@@ -418,6 +471,7 @@ export function LiveControl() {
     teamHomeId,
     teamAwayId,
     autoMode,
+    manualStatusOverride,
     vetoSession,
   ]);
 
