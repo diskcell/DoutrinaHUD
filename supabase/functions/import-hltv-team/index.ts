@@ -230,10 +230,13 @@ function extractPlayerImage(text: string, nickname: string) {
   const urls = [...htmlUrls, ...textUrls, ...(metaImage ? [metaImage] : [])];
   const nick = sanitizeFilePart(nickname);
 
+  const bodyshot = urls.find((url) => url.toLowerCase().includes('/playerbodyshot/'));
+  if (bodyshot) return bodyshot;
+
   return urls.find((url) => {
     const lower = url.toLowerCase();
-    return lower.includes('playerbodyshot') || lower.includes('playerprofile') || lower.includes(nick);
-  }) || urls[0] || '';
+    return lower.includes('playerprofile') || lower.includes(nick);
+  }) || '';
 }
 
 function extractRealName(text: string) {
@@ -273,6 +276,12 @@ async function fetchReaderText(url: string) {
 
 async function fetchHltvText(url: string) {
   try {
+    return await fetchReaderText(url);
+  } catch (error) {
+    console.warn('Leitor alternativo indisponivel para o jogador; tentando HTML direto.', error);
+  }
+
+  try {
     const response = await fetch(url, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126 Safari/537.36',
@@ -282,15 +291,19 @@ async function fetchHltvText(url: string) {
       signal: AbortSignal.timeout(15_000),
     });
 
-    if (response.ok) return response.text();
+    if (response.ok) {
+      const text = await response.text();
+      const isChallenge = /just a moment|cf_chl_|challenge-platform/i.test(text);
+      if (!isChallenge) return text;
+    }
     if (![403, 429].includes(response.status)) {
       throw new Error(`HLTV respondeu HTTP ${response.status}.`);
     }
   } catch (error) {
-    console.warn('Consulta direta da HLTV falhou; usando leitor alternativo.', error);
+    console.warn('Consulta direta da HLTV falhou.', error);
   }
 
-  return fetchReaderText(url);
+  throw new Error('Perfil da HLTV indisponivel.');
 }
 
 async function fetchTeamText(url: string) {
@@ -364,7 +377,7 @@ async function downloadPlayerImage(
   const normalized = normalizeEscapedUrl(imageUrl);
   const candidates = normalized.includes('img-cdn.hltv.org')
     ? [
-        `https://images.weserv.nl/?url=${encodeURIComponent(normalized.replace(/^https?:\/\//, ''))}&output=webp`,
+        `https://images.weserv.nl/?url=${encodeURIComponent(normalized.replace(/^https?:\/\//, ''))}&output=webp&q=92`,
         normalized,
       ]
     : [normalized];
@@ -386,7 +399,8 @@ async function downloadPlayerImage(
       if (!contentType || bytes.byteLength === 0 || bytes.byteLength > MAX_IMAGE_BYTES) continue;
 
       const extension = imageExtension(contentType);
-      const objectPath = `${workspaceId}/players/hltv-${playerId || sanitizeFilePart(nickname)}.${extension}`;
+      const version = `${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
+      const objectPath = `${workspaceId}/players/hltv-${playerId || sanitizeFilePart(nickname)}-${version}.${extension}`;
       const { error } = await admin.storage.from(ASSET_BUCKET).upload(
         objectPath,
         new Blob([bytes], { type: contentType }),
@@ -416,7 +430,7 @@ async function findExistingPlayer(workspaceId: string, teamId: number, hltvPlaye
   if (hltvPlayerId) {
     const { data, error } = await admin
       .from('players')
-      .select('id, avatar_path')
+      .select('id, avatar_path, avatar_source')
       .eq('workspace_id', workspaceId)
       .eq('hltv_player_id', hltvPlayerId)
       .limit(1)
@@ -427,7 +441,7 @@ async function findExistingPlayer(workspaceId: string, teamId: number, hltvPlaye
 
   const { data, error } = await admin
     .from('players')
-    .select('id, avatar_path')
+    .select('id, avatar_path, avatar_source')
     .eq('workspace_id', workspaceId)
     .eq('team_id', teamId)
     .ilike('nickname', nickname)
@@ -521,9 +535,19 @@ Deno.serve(async (request: Request) => {
           if (result) {
             nickname = result.nickName || nickname;
             realName = [result.firstName, result.lastName].filter(Boolean).join(' ') || realName;
-            imageUrl = result.pictureUrl || imageUrl;
             hltvPlayerId = result.id ? String(result.id) : hltvPlayerId;
             hltvProfileUrl = result.location ? normalizeHltvUrl(result.location) : hltvProfileUrl;
+
+            if (hltvProfileUrl) {
+              try {
+                const profileText = await fetchHltvText(hltvProfileUrl);
+                imageUrl = extractPlayerImage(profileText, nickname) || imageUrl;
+              } catch (error) {
+                console.warn(`Foto principal indisponivel para ${nickname}.`, error);
+              }
+            }
+
+            imageUrl = imageUrl || result.pictureUrl || '';
           }
         } catch (error) {
           console.warn(`Busca complementar falhou para ${nickname}.`, error);
@@ -561,6 +585,20 @@ Deno.serve(async (request: Request) => {
         : admin.from('players').insert(playerValues).select('id').single();
       const { data: saved, error: saveError } = await query;
       if (saveError) throw saveError;
+
+      if (
+        downloadedAvatar &&
+        existing?.avatar_source === 'hltv' &&
+        existing.avatar_path &&
+        existing.avatar_path !== downloadedAvatar
+      ) {
+        const { error: cleanupError } = await admin.storage
+          .from(ASSET_BUCKET)
+          .remove([existing.avatar_path]);
+        if (cleanupError) {
+          console.warn(`Nao foi possivel remover a foto antiga de ${nickname}.`, cleanupError);
+        }
+      }
 
       importedPlayers.push({
         id: saved.id,

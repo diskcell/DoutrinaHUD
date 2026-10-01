@@ -177,11 +177,12 @@ export function LiveControl() {
   */
 
   const [vetoSession, setVetoSession] = useState<any>(null);
+  const vetoMatchId = transport === 'supabase' && sessionId !== 'local' ? sessionId : 'default';
 
   useEffect(() => {
     if (!socket || !connected) return;
 
-    socket.emit('veto:get_status', { matchId: 'default' });
+    socket.emit('veto:get_status', { matchId: vetoMatchId });
 
     const handleVetoUpdate = (data: any) => {
       setVetoSession(data);
@@ -199,7 +200,7 @@ export function LiveControl() {
       socket.off('veto:update', handleVetoUpdate);
       socket.off('veto:error', handleVetoError);
     };
-  }, [socket, connected]);
+  }, [socket, connected, vetoMatchId]);
 
   const handleCreateVeto = () => {
     if (!socket || !connected) {
@@ -216,7 +217,7 @@ export function LiveControl() {
     const teamAway = teams.find(t => t.id === Number(teamAwayId));
 
     socket.emit('veto:create', {
-      matchId: 'default',
+      matchId: vetoMatchId,
       format,
       leftTeam: teamHome,
       rightTeam: teamAway
@@ -224,18 +225,18 @@ export function LiveControl() {
   };
 
   const handleStartVeto = () => {
-    socket?.emit('veto:start', { matchId: 'default' });
+    socket?.emit('veto:start', { matchId: vetoMatchId });
   };
 
   const handleResetVeto = () => {
     if (confirm('Deseja resetar o progresso do veto? (Mantém os times e links)')) {
-      socket?.emit('veto:reset', { matchId: 'default' });
+      socket?.emit('veto:reset', { matchId: vetoMatchId });
     }
   };
 
   const handleDeleteVeto = () => {
     if (confirm('Deseja EXCLUIR a sessão de veto? (Permite escolher novos times)')) {
-      socket?.emit('veto:delete', { matchId: 'default' });
+      socket?.emit('veto:delete', { matchId: vetoMatchId });
       setVetoSession(null);
     }
   };
@@ -247,8 +248,15 @@ export function LiveControl() {
 
   const getCaptainLink = (token: string) => {
     const baseUrl = window.location.origin + window.location.pathname;
-    return `${baseUrl}#/captain-veto/default/${token}`;
+    const sessionQuery = transport === 'supabase'
+      ? `?session=${encodeURIComponent(sessionId)}`
+      : '';
+    return `${baseUrl}#/captain-veto/${encodeURIComponent(vetoMatchId)}/${encodeURIComponent(token)}${sessionQuery}`;
   };
+
+  const vetoOverlayUrl = `${window.location.origin}${window.location.pathname}#/veto${
+    transport === 'supabase' ? `?session=${encodeURIComponent(sessionId)}` : ''
+  }`;
 
   /*
    ============================================================
@@ -1079,7 +1087,7 @@ export function LiveControl() {
              <MonitorPlay className="w-3.5 h-3.5" />
              URL DA OVERLAY DE VETO: 
              <code className="bg-neutral-950 px-2 py-1 rounded text-emerald-500 border border-neutral-800 ml-1 select-all cursor-pointer">
-               {window.location.origin}/#/veto
+               {vetoOverlayUrl}
              </code>
           </div>
           <div className="text-[9px] font-black text-neutral-700 uppercase tracking-widest">

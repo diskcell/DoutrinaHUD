@@ -32,7 +32,7 @@ const getMapThumb = (mapName: string) => {
     'Overpass': 'webp',
   };
   const ext = EXTENSIONS[mapName] || 'png';
-  return `/maps/${folder}/veto.${ext}`;
+  return `./maps/${folder}/veto.${ext}`;
 };
 
 export function CaptainVetoView() {
@@ -50,10 +50,10 @@ export function CaptainVetoView() {
     if (!socket || !connected || !matchId || !teamToken) return;
 
     socket.emit('veto:join', { matchId, token: teamToken });
-    socket.emit('veto:get_status', { matchId });
+    socket.emit('veto:get_status', { matchId, token: teamToken });
 
     const handleUpdate = (data: any) => {
-      if (data.matchId === matchId) {
+      if (data?.matchId === matchId) {
         setSession(data);
         // Reset local selection when session updates
         setSelectedMaps([]);
@@ -80,8 +80,8 @@ export function CaptainVetoView() {
     );
   }
 
-  const isLeft = teamToken === session.leftToken;
-  const isRight = teamToken === session.rightToken;
+  const isLeft = session.viewerSide === 'left' || teamToken === session.leftToken;
+  const isRight = session.viewerSide === 'right' || teamToken === session.rightToken;
   const myTeam = isLeft ? session.leftTeam : session.rightTeam;
   const mySide = isLeft ? 'left' : 'right';
   const myReady = isLeft ? session.leftReady : session.rightReady;

@@ -25,29 +25,46 @@ const getMapThumb = (mapName: string) => {
     'Overpass': 'webp',
   };
   const ext = EXTENSIONS[mapName] || 'png';
-  return `/maps/${folder}/veto.${ext}`;
+  return `./maps/${folder}/veto.${ext}`;
 };
 
 export function VetoOverlayView() {
-  const { socket, connected } = useSocket();
+  const { socket, connected, sessionId, transport } = useSocket();
   const [hudState, setHudState] = useState<any>(null);
+  const [vetoSession, setVetoSession] = useState<any>(null);
 
   useEffect(() => {
     if (!socket || !connected) return;
 
     socket.emit('overlay:ready');
+    if (transport === 'supabase') {
+      socket.emit('veto:get_status', { matchId: sessionId });
+    }
 
     const handleHud = (data: any) => {
       setHudState(data);
     };
 
+    const handleVeto = (data: any) => {
+      setVetoSession(data);
+    };
+
     socket.on('hud:update', handleHud);
+    socket.on('veto:update', handleVeto);
     return () => {
       socket.off('hud:update', handleHud);
+      socket.off('veto:update', handleVeto);
     };
-  }, [socket, connected]);
+  }, [socket, connected, sessionId, transport]);
 
-  const veto = hudState?.match?.veto;
+  const veto = vetoSession
+    ? {
+        ...vetoSession,
+        isActive: true,
+        revealedActions: vetoSession.actions || [],
+        currentRevealId: vetoSession.actions?.at(-1)?.id,
+      }
+    : hudState?.match?.veto;
   const match = hudState?.match || {};
 
   if (!veto || !veto.isActive) {
@@ -61,8 +78,8 @@ export function VetoOverlayView() {
     );
   }
 
-  const teamLeft = match.teamHome || { name: 'TIME ESQUERDA', tag: 'LEFT', logo: '' };
-  const teamRight = match.teamAway || { name: 'TIME DIREITA', tag: 'RIGHT', logo: '' };
+  const teamLeft = vetoSession?.leftTeam || match.teamHome || { name: 'TIME ESQUERDA', tag: 'LEFT', logo: '' };
+  const teamRight = vetoSession?.rightTeam || match.teamAway || { name: 'TIME DIREITA', tag: 'RIGHT', logo: '' };
 
   const revealedActions = veto.revealedActions || [];
   const currentRevealId = veto.currentRevealId;

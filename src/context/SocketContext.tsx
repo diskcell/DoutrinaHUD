@@ -14,6 +14,7 @@ import {
   loadCloudLiveBootstrap,
   updateCloudLiveHudState,
 } from '../frontend/lib/cloudLive';
+import { invokeCloudVeto, withStoredCloudVetoTokens } from '../frontend/lib/cloudVeto';
 
 type SocketHandler = (payload: any) => void;
 
@@ -187,7 +188,13 @@ export function SocketProvider({ children }: { children: ReactNode }) {
           }
 
           if (event.startsWith('veto:')) {
-            console.warn('O veto online sera migrado em uma proxima etapa.');
+            void invokeCloudVeto(event, payload, sessionId)
+              .then((state) => dispatch('veto:update', state))
+              .catch((error) => {
+                console.error('Falha no veto online:', error);
+                dispatch('veto:error', { message: error instanceof Error ? error.message : String(error) });
+              });
+            return adapter;
           }
 
           return adapter;
@@ -208,6 +215,9 @@ export function SocketProvider({ children }: { children: ReactNode }) {
               }
             })
             .catch((error) => console.error('Falha ao validar estado da HUD:', error));
+        })
+        .on('broadcast', { event: 'veto:update' }, ({ payload }) => {
+          dispatch('veto:update', withStoredCloudVetoTokens(sessionId, payload));
         })
         .subscribe((status) => {
           if (status === 'SUBSCRIBED') {

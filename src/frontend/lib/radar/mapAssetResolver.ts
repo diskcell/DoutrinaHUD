@@ -11,7 +11,7 @@ export function resolveMapAssets(mapName: string, playerPos?: Vector3 | null): M
   const config = getMapConfig(mapName);
   if (!config) return null;
 
-  const mapFolder = `/maps/${config.map}`;
+  const mapFolder = `${import.meta.env.BASE_URL}maps/${config.map}`;
   let image = `${mapFolder}/${config.image}`;
   let isLower = false;
 
