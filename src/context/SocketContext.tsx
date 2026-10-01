@@ -6,13 +6,24 @@ import {
 } from 'react';
 
 import type { ReactNode } from 'react';
-import { io, Socket } from 'socket.io-client';
+import { io } from 'socket.io-client';
+import { isSupabaseConfigured, requireSupabase, supabaseProjectUrl } from '../lib/supabase';
+import { loadCloudLiveBootstrap, updateCloudLiveHudState } from '../frontend/lib/cloudLive';
+
+type SocketHandler = (payload: any) => void;
+
+export interface SocketLike {
+  on: (event: string, handler: SocketHandler) => SocketLike;
+  off: (event: string, handler: SocketHandler) => SocketLike;
+  emit: (event: string, payload?: unknown) => SocketLike;
+}
 
 interface SocketContextData {
-  socket: Socket | null;
+  socket: SocketLike | null;
   connected: boolean;
   sessionId: string;
   socketUrl: string | null;
+  transport: 'supabase' | 'socket.io' | null;
 }
 
 const SocketContext = createContext<SocketContextData>({
@@ -20,9 +31,9 @@ const SocketContext = createContext<SocketContextData>({
   connected: false,
   sessionId: 'local',
   socketUrl: null,
+  transport: null,
 });
 
-// Porta local do seu backend
 const LOCAL_BACKEND_URL = 'http://127.0.0.1:3000';
 
 function getUrlParams() {
@@ -52,9 +63,6 @@ function getSocketUrl() {
     return LOCAL_BACKEND_URL;
   }
 
-  // Permite trocar a URL do ngrok pela URL do navegador sem rebuild:
-  // Exemplo:
-  // https://diskcell.github.io/DoutrinaHUD/?socket=https://sua-url.ngrok-free.dev#/overlay
   const params = getUrlParams();
   const socketFromUrl = params.get('socket');
 
@@ -69,13 +77,7 @@ function getSocketUrl() {
     return window.location.origin;
   }
 
-  const savedSocketUrl = localStorage.getItem('doutrinahud_socket_url');
-
-  if (savedSocketUrl) {
-    return savedSocketUrl;
-  }
-
-  return '';
+  return localStorage.getItem('doutrinahud_socket_url') || '';
 }
 
 function getSessionId() {
@@ -83,18 +85,117 @@ function getSessionId() {
 }
 
 export function SocketProvider({ children }: { children: ReactNode }) {
-  const [socket, setSocket] = useState<Socket | null>(null);
+  const [socket, setSocket] = useState<SocketLike | null>(null);
   const [connected, setConnected] = useState(false);
-  const [sessionId] = useState(getSessionId);
+  const [transport, setTransport] = useState<'supabase' | 'socket.io' | null>(null);
+  const [sessionId, setSessionId] = useState(getSessionId);
   const [socketUrl] = useState(getSocketUrl);
 
   useEffect(() => {
-    if (!socketUrl) {
-      console.warn('Defina a URL do servidor online para conectar o DoutrinaHUD.');
-      return;
+    const syncSessionFromUrl = () => setSessionId(getSessionId());
+    window.addEventListener('hashchange', syncSessionFromUrl);
+    window.addEventListener('popstate', syncSessionFromUrl);
+
+    return () => {
+      window.removeEventListener('hashchange', syncSessionFromUrl);
+      window.removeEventListener('popstate', syncSessionFromUrl);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (isSupabaseConfigured && sessionId !== 'local') {
+      const client = requireSupabase();
+      const handlers = new Map<string, Set<SocketHandler>>();
+      const channel = client.channel(`live:${sessionId}`, {
+        config: {
+          broadcast: { self: true, ack: true },
+        },
+      });
+
+      const dispatch = (event: string, payload: unknown) => {
+        handlers.get(event)?.forEach((handler) => handler(payload));
+      };
+
+      const adapter: SocketLike = {
+        on(event, handler) {
+          const eventHandlers = handlers.get(event) || new Set<SocketHandler>();
+          eventHandlers.add(handler);
+          handlers.set(event, eventHandlers);
+          return adapter;
+        },
+        off(event, handler) {
+          handlers.get(event)?.delete(handler);
+          return adapter;
+        },
+        emit(event, payload) {
+          if (event === 'overlay:ready') {
+            loadCloudLiveBootstrap(sessionId)
+              .then((bootstrap) => {
+                if (bootstrap?.latestHudState) {
+                  dispatch('hud:update', bootstrap.latestHudState);
+                }
+              })
+              .catch((error) => console.error('Falha ao recuperar estado da HUD:', error));
+            return adapter;
+          }
+
+          if (event === 'hud:command') {
+            updateCloudLiveHudState(sessionId, payload)
+              .then(() => channel.send({
+                type: 'broadcast',
+                event: 'hud:update',
+                payload,
+              }))
+              .catch((error) => console.error('Falha ao sincronizar a HUD:', error));
+            return adapter;
+          }
+
+          if (event.startsWith('veto:')) {
+            console.warn('O veto online sera migrado em uma proxima etapa.');
+          }
+
+          return adapter;
+        },
+      };
+
+      channel
+        .on('broadcast', { event: 'gsi:update' }, ({ payload }) => {
+          dispatch('gsi:update', payload);
+        })
+        .on('broadcast', { event: 'hud:update' }, ({ payload }) => {
+          void loadCloudLiveBootstrap(sessionId)
+            .then((bootstrap) => {
+              if (bootstrap?.latestHudState) {
+                dispatch('hud:update', bootstrap.latestHudState);
+              } else if (payload) {
+                console.warn('Atualizacao da HUD recebida sem estado persistido.');
+              }
+            })
+            .catch((error) => console.error('Falha ao validar estado da HUD:', error));
+        })
+        .subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            setConnected(true);
+          } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+            setConnected(false);
+          }
+        });
+
+      setSocket(adapter);
+      setTransport('supabase');
+
+      return () => {
+        setConnected(false);
+        setSocket(null);
+        void client.removeChannel(channel);
+      };
     }
 
-    console.log('Conectando Socket.io em:', socketUrl);
+    if (!socketUrl) {
+      console.warn('Defina a URL do servidor online para conectar o DoutrinaHUD.');
+      setTransport(null);
+      return;
+    }
 
     const socketIo = io(socketUrl, {
       transports: ['websocket', 'polling'],
@@ -108,22 +209,12 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       timeout: 10000,
     });
 
-    socketIo.on('connect', () => {
-      console.log('Socket conectado:', socketIo.id);
-      setConnected(true);
-    });
+    socketIo.on('connect', () => setConnected(true));
+    socketIo.on('disconnect', () => setConnected(false));
+    socketIo.on('connect_error', () => setConnected(false));
 
-    socketIo.on('disconnect', (reason) => {
-      console.log('Socket desconectado:', reason);
-      setConnected(false);
-    });
-
-    socketIo.on('connect_error', (error) => {
-      console.error('Erro ao conectar socket:', error.message);
-      setConnected(false);
-    });
-
-    setSocket(socketIo);
+    setSocket(socketIo as SocketLike);
+    setTransport('socket.io');
 
     return () => {
       socketIo.disconnect();
@@ -131,7 +222,15 @@ export function SocketProvider({ children }: { children: ReactNode }) {
   }, [sessionId, socketUrl]);
 
   return (
-    <SocketContext.Provider value={{ socket, connected, sessionId, socketUrl: socketUrl || null }}>
+    <SocketContext.Provider
+      value={{
+        socket,
+        connected,
+        sessionId,
+        socketUrl: transport === 'supabase' ? supabaseProjectUrl : socketUrl || null,
+        transport,
+      }}
+    >
       {children}
     </SocketContext.Provider>
   );

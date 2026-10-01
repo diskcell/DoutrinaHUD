@@ -1,12 +1,22 @@
 import { useEffect, useState } from 'react';
 import { Copy, Download, ExternalLink, Plus, Radio } from 'lucide-react';
 import { useSocket } from '../../context/SocketContext';
+import { isSupabaseConfigured } from '../../lib/supabase';
+import { useOptionalCloudSession } from '../context/CloudSessionContext';
+import {
+  cloudLiveSessionExists,
+  createCloudLiveSession,
+  getCloudGsiEndpoint,
+} from '../lib/cloudLive';
+import { getStoredActiveOverlayId } from '../lib/overlayModels';
 
 interface OnlineSession {
   id: string;
   token: string;
-  controlToken?: string;
+  controlToken: string;
   createdAt: number;
+  expiresAt?: string;
+  overlayModelId?: string;
 }
 
 function appUrl(path: string, sessionId: string, controlToken?: string) {
@@ -29,22 +39,25 @@ function getSavedOnlineSession(storageKey: string): OnlineSession | null {
     return {
       id: session.id,
       token: session.token,
+      controlToken: typeof session.controlToken === 'string' ? session.controlToken : '',
       createdAt: typeof session.createdAt === 'number' ? session.createdAt : Date.now(),
+      expiresAt: typeof session.expiresAt === 'string' ? session.expiresAt : undefined,
+      overlayModelId: typeof session.overlayModelId === 'string'
+        ? session.overlayModelId
+        : 'professional_v1',
     };
   } catch {
     return null;
   }
 }
 
-function createOnlineGsiConfig(session: OnlineSession) {
-  const endpoint = `${window.location.origin}/gsi/${encodeURIComponent(session.id)}`;
-
+function createOnlineGsiConfig(session: OnlineSession, endpoint: string) {
   return `"DoutrinaHUD"
 {
   "uri" "${endpoint}"
   "timeout" "5.0"
   "buffer" "0.05"
-  "throttle" "0.05"
+  "throttle" "0.20"
   "heartbeat" "30.0"
 
   "auth"
@@ -76,7 +89,8 @@ function createOnlineGsiConfig(session: OnlineSession) {
 }
 
 export function Dashboard() {
-  const { connected, sessionId } = useSocket();
+  const { connected } = useSocket();
+  const cloudSession = useOptionalCloudSession();
   const [onlineSession, setOnlineSession] = useState<OnlineSession | null>(null);
   const [storageKey, setStorageKey] = useState<string | null>(null);
   const [creatingSession, setCreatingSession] = useState(false);
@@ -89,6 +103,39 @@ export function Dashboard() {
   };
 
   useEffect(() => {
+    let isMounted = true;
+
+    if (isSupabaseConfigured && cloudSession) {
+      const key = `doutrinahud-online-session:${cloudSession.user.id}`;
+      const savedSession = getSavedOnlineSession(key);
+      setStorageKey(key);
+
+      if (!savedSession) {
+        setOnlineSession(null);
+        return () => {
+          isMounted = false;
+        };
+      }
+
+      cloudLiveSessionExists(cloudSession.workspaceId, savedSession.id)
+        .then((exists) => {
+          if (!isMounted) return;
+          if (exists) {
+            setOnlineSession(savedSession);
+          } else {
+            localStorage.removeItem(key);
+            setOnlineSession(null);
+          }
+        })
+        .catch(() => {
+          if (isMounted) setOnlineSession(null);
+        });
+
+      return () => {
+        isMounted = false;
+      };
+    }
+
     fetch('/api/auth/me')
       .then((response) => response.json())
       .then((data) => {
@@ -98,12 +145,19 @@ export function Dashboard() {
         setOnlineSession(getSavedOnlineSession(key));
       })
       .catch(() => setOnlineSession(null));
-  }, []);
+
+    return () => {
+      isMounted = false;
+    };
+  }, [cloudSession]);
 
   const downloadGsiConfig = () => {
     if (!onlineSession) return;
 
-    const file = new Blob([createOnlineGsiConfig(onlineSession)], { type: 'text/plain' });
+    const endpoint = isSupabaseConfigured
+      ? getCloudGsiEndpoint(onlineSession.id)
+      : `${window.location.origin}/gsi/${encodeURIComponent(onlineSession.id)}`;
+    const file = new Blob([createOnlineGsiConfig(onlineSession, endpoint)], { type: 'text/plain' });
     const url = URL.createObjectURL(file);
     const link = document.createElement('a');
     link.href = url;
@@ -116,24 +170,38 @@ export function Dashboard() {
     setCreatingSession(true);
 
     try {
-      const response = await fetch('/api/sessions', { method: 'POST' });
+      let session: OnlineSession;
 
-      if (!response.ok) {
-        throw new Error('Nao foi possivel criar a sessao.');
+      if (isSupabaseConfigured && cloudSession) {
+        session = await createCloudLiveSession(
+          cloudSession.workspaceId,
+          cloudSession.user.id,
+          getStoredActiveOverlayId()
+        );
+      } else {
+        const response = await fetch('/api/sessions', { method: 'POST' });
+
+        if (!response.ok) {
+          throw new Error('Nao foi possivel criar a sessao.');
+        }
+
+        session = (await response.json()) as OnlineSession;
       }
 
-      const session = (await response.json()) as OnlineSession;
       if (storageKey) window.localStorage.setItem(storageKey, JSON.stringify(session));
       setOnlineSession(session);
     } catch (error) {
       console.error(error);
-      alert('Nao foi possivel criar a sessao. Verifique se o servidor online esta conectado.');
+      alert('Nao foi possivel criar a sessao online. Verifique se a estrutura do Supabase foi instalada.');
     } finally {
       setCreatingSession(false);
     }
   };
 
-  const overlayUrl = onlineSession ? appUrl('/overlay', onlineSession.id) : '';
+  const overlayRoute = onlineSession?.overlayModelId === 'broadcast_v1'
+    ? '/overlay/broadcast'
+    : '/overlay/professional';
+  const overlayUrl = onlineSession ? appUrl(overlayRoute, onlineSession.id) : '';
   const controlUrl = onlineSession ? appUrl('/admin/live', onlineSession.id, onlineSession.controlToken) : '';
 
   return (
@@ -167,10 +235,15 @@ export function Dashboard() {
             <div>
               <h2 className="text-lg font-semibold text-white">Sessao Online</h2>
               <p className="text-sm text-neutral-400 mt-1">
-                Sessao atual: <span className="font-mono text-neutral-200">{sessionId}</span>
-                <span className={connected ? 'text-emerald-400' : 'text-amber-400'}>
-                  {connected ? ' conectado' : ' aguardando servidor'}
-                </span>
+                {onlineSession ? (
+                  <>
+                    Sessao pronta: <span className="font-mono text-neutral-200">{onlineSession.id}</span>
+                  </>
+                ) : (
+                  <span className={connected ? 'text-emerald-400' : 'text-neutral-400'}>
+                    Crie uma sessao para conectar o CS2 ao overlay.
+                  </span>
+                )}
               </p>
             </div>
           </div>
@@ -232,6 +305,14 @@ export function Dashboard() {
                   <Copy className="w-4 h-4" />
                   {copiedValue === 'overlay' ? 'Link copiado' : 'Copiar overlay'}
                 </button>
+                <button
+                  type="button"
+                  onClick={() => copyValue(controlUrl, 'control')}
+                  className="inline-flex items-center gap-2 text-sm text-neutral-300 hover:text-white"
+                >
+                  <Copy className="w-4 h-4" />
+                  {copiedValue === 'control' ? 'Painel copiado' : 'Copiar painel'}
+                </button>
                 <a
                   href={overlayUrl}
                   target="_blank"
@@ -240,6 +321,15 @@ export function Dashboard() {
                 >
                   <ExternalLink className="w-4 h-4" />
                   Abrir overlay
+                </a>
+                <a
+                  href={controlUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-2 text-sm text-emerald-400 hover:text-emerald-300"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  Abrir painel
                 </a>
               </div>
             </div>

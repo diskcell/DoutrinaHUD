@@ -42,14 +42,47 @@ As imagens sao publicas para que overlays do OBS possam renderiza-las. Somente
 membros `owner` ou `editor` do workspace podem criar, substituir ou excluir
 arquivos.
 
+## Sessoes ao vivo e GSI online
+
+No SQL Editor, crie uma consulta chamada
+`03 - Sessoes ao vivo e GSI online` e execute:
+
+```text
+supabase/migrations/202610010003_live_sessions.sql
+```
+
+Essa migracao cria sessoes exclusivas com validade de sete dias. O token GSI e
+o token de controle sao gerados no navegador; o banco recebe apenas os hashes
+SHA-256. O token original nao e gravado no Postgres.
+
+Depois, publique a Edge Function:
+
+```powershell
+npx supabase login
+npx supabase link --project-ref ckbjuasdwouzveidcidw
+npx supabase functions deploy super-api --no-verify-jwt
+```
+
+O `--no-verify-jwt` e necessario porque o Counter-Strike envia o token GSI no
+corpo JSON e nao consegue enviar um JWT do Supabase. A funcao valida o hash com
+a chave privada do ambiente antes de transmitir qualquer dado.
+
+Fluxo para o operador:
+
+1. Entrar no DoutrinaHUD e clicar em `Nova Sessao`.
+2. Baixar o CFG exclusivo e coloca-lo na pasta `game/csgo/cfg` do CS2.
+3. Copiar o link do overlay para uma fonte de navegador do OBS.
+4. Abrir o painel da sessao em outra aba para selecionar times e controlar a HUD.
+
+O CFG usa `throttle 0.20`, limitado a aproximadamente cinco atualizacoes por
+segundo, para reduzir o consumo do plano gratuito sem prejudicar a HUD.
+
 ## Proximas etapas
 
-1. Aplicar a migracao no projeto remoto.
-2. Trocar a tela de login para Supabase Auth.
-3. Migrar CRUD de times e jogadores para Postgres + Storage.
-4. Criar a Edge Function de importacao HLTV.
-5. Importar o SQLite e os uploads locais.
-6. Migrar GSI e overlay para Supabase Realtime Broadcast.
+1. Publicar e testar a Edge Function GSI.
+2. Migrar o fluxo de veto para o Supabase.
+3. Criar a Edge Function de importacao HLTV.
+4. Importar o SQLite e os uploads locais, se ainda houver dados antigos.
 
 ## Email de confirmacao
 

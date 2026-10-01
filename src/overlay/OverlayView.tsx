@@ -18,6 +18,7 @@ import {
   getStoredActiveOverlayId,
   OverlayVariant,
 } from '../frontend/lib/overlayModels';
+import { loadCloudLiveBootstrap } from '../frontend/lib/cloudLive';
 
 import { findRegisteredPlayer, getPlayerAvatar } from '../frontend/lib/players/playerIdentity';
 
@@ -47,7 +48,7 @@ function getManualTimerStatus(matchStatus: string | undefined) {
 }
 
 export function OverlayView({ variant }: OverlayViewProps) {
-  const { socket, connected, sessionId } = useSocket();
+  const { socket, connected, sessionId, transport } = useSocket();
   const [selectedVariant, setSelectedVariant] = useState<OverlayVariant>(() => {
     return variant || getOverlayVariantFromModelId(getStoredActiveOverlayId());
   });
@@ -86,6 +87,20 @@ export function OverlayView({ variant }: OverlayViewProps) {
 
     let isMounted = true;
 
+    if (transport === 'supabase' && sessionId !== 'local') {
+      loadCloudLiveBootstrap(sessionId)
+        .then((bootstrap) => {
+          if (isMounted && bootstrap?.overlayModelId) {
+            setSelectedVariant(getOverlayVariantFromModelId(bootstrap.overlayModelId));
+          }
+        })
+        .catch((error) => console.error('Erro ao carregar modelo da overlay:', error));
+
+      return () => {
+        isMounted = false;
+      };
+    }
+
     const syncFromStorage = () => {
       setSelectedVariant(getOverlayVariantFromModelId(getStoredActiveOverlayId()));
     };
@@ -106,11 +121,12 @@ export function OverlayView({ variant }: OverlayViewProps) {
       window.removeEventListener('storage', syncFromStorage);
       window.removeEventListener('doutrinahud:overlay-model-change', syncFromStorage);
     };
-  }, [variant, sessionId]);
+  }, [variant, sessionId, transport]);
 
   // Fetch Steam profiles when new players appear
   useEffect(() => {
     if (!gsiState?.allplayers) return;
+    if (transport === 'supabase') return;
 
     const steamids = Object.keys(gsiState.allplayers);
     const missingSteamids = steamids.filter(id => {
@@ -133,7 +149,7 @@ export function OverlayView({ variant }: OverlayViewProps) {
       })
       .catch(err => console.warn('Error fetching steam profiles:', err));
     }
-  }, [gsiState?.allplayers, dbPlayers]);
+  }, [gsiState?.allplayers, dbPlayers, steamProfiles, transport]);
 
   // Handle kill detection for panel highlighting
   const handleKillDetected = (steamid: string) => {
@@ -154,18 +170,23 @@ export function OverlayView({ variant }: OverlayViewProps) {
   };
 
   useEffect(() => {
+    if (transport === 'supabase' && sessionId !== 'local') {
+      loadCloudLiveBootstrap(sessionId)
+        .then((bootstrap) => setDbPlayers(bootstrap?.players || []))
+        .catch((error) => console.error('Erro ao carregar jogadores do Supabase:', error));
+      return;
+    }
+
     fetch('/api/players')
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) setDbPlayers(data);
       })
       .catch(err => console.error('Error fetching players:', err));
-  }, []);
+  }, [sessionId, transport]);
 
   useEffect(() => {
     if (!socket || !connected) return;
-
-    socket.emit('overlay:ready');
 
     const handleHud = (data: any) => {
       setHudState(data);
@@ -191,6 +212,7 @@ export function OverlayView({ variant }: OverlayViewProps) {
 
     socket.on('hud:update', handleHud);
     socket.on('gsi:update', handleGsi);
+    socket.emit('overlay:ready');
 
     return () => {
       socket.off('hud:update', handleHud);

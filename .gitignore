@@ -11,6 +11,7 @@ database/*.db-*
 public/uploads/
 backups/
 data/
+supabase/.temp/
 *.7z
 test
 test.txt

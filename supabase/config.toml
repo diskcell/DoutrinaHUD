@@ -1,0 +1,5 @@
+project_id = "ckbjuasdwouzveidcidw"
+
+[functions.super-api]
+verify_jwt = false
+

@@ -18,6 +18,9 @@ import {
 
 import { cn } from '../components/AdminLayout';
 import { useSocket } from '../../context/SocketContext';
+import { isSupabaseConfigured } from '../../lib/supabase';
+import { useOptionalCloudSession } from '../context/CloudSessionContext';
+import { listCloudTeams } from '../lib/cloudData';
 
 const MOCK_TEAMS = [
   { id: 1, name: 'FURIA Esports', tag: 'FUR', logo: '' },
@@ -56,7 +59,8 @@ const MAPS = [
 ];
 
 export function LiveControl() {
-  const { socket, connected } = useSocket();
+  const { socket, connected, transport } = useSocket();
+  const cloudSession = useOptionalCloudSession();
 
   const [teams, setTeams] = useState<any[]>(MOCK_TEAMS);
 
@@ -98,9 +102,6 @@ export function LiveControl() {
   useEffect(() => {
     if (!socket || !connected) return;
 
-    // Pedir o estado atual ao conectar
-    socket.emit('overlay:ready'); 
-
     const handleInitialSync = (data: any) => {
       if (data && data.match) {
         console.log('Recuperando estado anterior:', data.match);
@@ -128,6 +129,7 @@ export function LiveControl() {
     };
 
     socket.on('hud:update', handleInitialSync);
+    socket.emit('overlay:ready');
 
     return () => {
       socket.off('hud:update', handleInitialSync);
@@ -230,6 +232,15 @@ export function LiveControl() {
   */
 
   useEffect(() => {
+    if (isSupabaseConfigured && cloudSession) {
+      listCloudTeams(cloudSession.workspaceId)
+        .then((data) => {
+          if (data.length > 0) setTeams(data);
+        })
+        .catch((error) => console.error('Erro ao carregar times do Supabase:', error));
+      return;
+    }
+
     fetch('/api/teams')
       .then((res) => res.json())
       .then((data) => {
@@ -238,7 +249,7 @@ export function LiveControl() {
         }
       })
       .catch(() => {});
-  }, []);
+  }, [cloudSession]);
 
   /*
    ============================================================
@@ -394,6 +405,7 @@ export function LiveControl() {
   useEffect(() => {
     handleSyncOverlay();
   }, [
+    connected,
     scoreHome,
     scoreAway,
     scoreSeriesHome,
@@ -488,7 +500,9 @@ export function LiveControl() {
             connected ? "bg-emerald-500/10 border-emerald-500/50 text-emerald-500" : "bg-red-500/10 border-red-500/50 text-red-500"
           )}>
             <div className={cn("w-2 h-2 rounded-full", connected ? "bg-emerald-500 animate-pulse" : "bg-red-500")} />
-            {connected ? "Server Conectado" : "Server Desconectado"}
+            {connected
+              ? transport === 'supabase' ? "Realtime Conectado" : "Server Conectado"
+              : "Desconectado"}
           </div>
 
           <button
