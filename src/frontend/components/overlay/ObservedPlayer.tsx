@@ -163,13 +163,14 @@ export function ObservedPlayer({ player }: { player: any }) {
              {/* Right Section: Weapon & Ammo - COMPACT */}
              <div className="w-[170px] flex items-center justify-end gap-3 pr-6 pl-3 shrink-0 border-l border-white/10 h-full bg-black/20 overflow-visible rounded-r-xl">
                <div className="flex-1 flex justify-center items-center overflow-visible min-w-0">
-                 <AnimatePresence mode="wait">
+                 <AnimatePresence initial={false} mode="popLayout">
                    {activeWeapon && (
                      <motion.img 
                        key={activeWeapon.name}
                        initial={{ scale: 0.9, opacity: 0 }}
                        animate={{ scale: 1, opacity: 1 }}
                        exit={{ scale: 0.9, opacity: 0 }}
+                       transition={{ duration: 0.08, ease: 'easeOut' }}
                        src={getWeaponIcon(activeWeapon.name)} 
                        className="h-8 w-auto max-w-[105px] object-contain brightness-0 invert opacity-90 drop-shadow-2xl"
                        onError={(e) => (e.currentTarget.style.display = 'none')}

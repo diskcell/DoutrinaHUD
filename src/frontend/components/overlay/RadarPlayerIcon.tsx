@@ -9,10 +9,12 @@ interface RadarPlayerIconProps {
   rotation?: number;
   isObserved: boolean;
   hasBomb: boolean;
+  sampleReceivedAt?: string | null;
 }
 
-const POSITION_TWEEN_SECONDS = 0.23;
-const ROTATION_TWEEN_SECONDS = 0.18;
+const DEFAULT_TWEEN_SECONDS = 0.62;
+const MIN_TWEEN_SECONDS = 0.2;
+const MAX_TWEEN_SECONDS = 0.78;
 const TELEPORT_DISTANCE_PERCENT = 18;
 
 function shortestAngleDelta(from: number, to: number) {
@@ -48,6 +50,7 @@ export function RadarPlayerIcon({
   rotation = 0,
   isObserved,
   hasBomb,
+  sampleReceivedAt,
 }: RadarPlayerIconProps) {
   const isCT = player.team === 'CT';
   const health = player.state?.health ?? 0;
@@ -55,7 +58,25 @@ export function RadarPlayerIcon({
   const safeRotation = Number.isFinite(rotation) ? rotation : 0;
   const previousPositionRef = useRef({ x, y });
   const previousRotationRef = useRef(safeRotation);
+  const previousSampleTimeRef = useRef<number | null>(null);
+  const tweenDurationRef = useRef(DEFAULT_TWEEN_SECONDS);
   const [continuousRotation, setContinuousRotation] = useState(safeRotation);
+
+  const sampleTime = sampleReceivedAt ? Date.parse(sampleReceivedAt) : Number.NaN;
+  if (Number.isFinite(sampleTime) && sampleTime !== previousSampleTimeRef.current) {
+    if (previousSampleTimeRef.current !== null) {
+      const intervalSeconds = (sampleTime - previousSampleTimeRef.current) / 1000;
+      if (intervalSeconds > 0 && intervalSeconds < 3) {
+        const desiredDuration = Math.min(
+          MAX_TWEEN_SECONDS,
+          Math.max(MIN_TWEEN_SECONDS, intervalSeconds * 1.12),
+        );
+        tweenDurationRef.current =
+          tweenDurationRef.current * 0.35 + desiredDuration * 0.65;
+      }
+    }
+    previousSampleTimeRef.current = sampleTime;
+  }
 
   const positionDistance = Math.hypot(
     x - previousPositionRef.current.x,
@@ -124,7 +145,7 @@ export function RadarPlayerIcon({
         top: `${y}%`,
       }}
       transition={{
-        duration: shouldSnapPosition ? 0 : POSITION_TWEEN_SECONDS,
+        duration: shouldSnapPosition ? 0 : tweenDurationRef.current,
         ease: 'linear',
       }}
       className={cn(
@@ -162,7 +183,7 @@ export function RadarPlayerIcon({
           initial={false}
           animate={{ rotate: continuousRotation }}
           transition={{
-            duration: shouldSnapPosition ? 0 : ROTATION_TWEEN_SECONDS,
+            duration: shouldSnapPosition ? 0 : tweenDurationRef.current,
             ease: 'linear',
           }}
           className="absolute inset-0 w-full h-full drop-shadow-md"

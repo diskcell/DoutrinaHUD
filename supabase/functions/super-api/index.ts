@@ -110,6 +110,24 @@ function normalizeGameState(gameState: Record<string, any>) {
   };
 }
 
+async function broadcastGameState(topic: string, payload: Record<string, any>) {
+  const broadcastUrl = `${supabaseUrl}/realtime/v1/api/broadcast/${encodeURIComponent(topic)}/events/${encodeURIComponent('gsi:update')}`;
+  const response = await fetch(broadcastUrl, {
+    method: 'POST',
+    headers: {
+      apikey: serviceKey,
+      Authorization: `Bearer ${serviceKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(`Realtime Broadcast recusou o GSI (${response.status}): ${detail}`);
+  }
+}
+
 async function getSession(publicId: string): Promise<CachedSession | null> {
   const cached = sessionCache.get(publicId);
   const currentTime = Date.now();
@@ -203,21 +221,22 @@ Deno.serve(async (request: Request) => {
 
     const payload = normalizeGameState(gameState);
     const topic = `live:${publicId}`;
-    const broadcastUrl = `${supabaseUrl}/realtime/v1/api/broadcast/${encodeURIComponent(topic)}/events/${encodeURIComponent('gsi:update')}`;
-    const broadcastResponse = await fetch(broadcastUrl, {
-      method: 'POST',
-      headers: {
-        apikey: serviceKey,
-        Authorization: `Bearer ${serviceKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    });
+    const broadcastTask = broadcastGameState(topic, payload);
+    const edgeRuntime = (globalThis as any).EdgeRuntime;
 
-    if (!broadcastResponse.ok) {
-      const detail = await broadcastResponse.text();
-      console.error('Realtime Broadcast recusou o GSI:', broadcastResponse.status, detail);
-      return jsonResponse({ error: 'Nao foi possivel transmitir o GSI.' }, 502);
+    if (edgeRuntime?.waitUntil) {
+      edgeRuntime.waitUntil(
+        broadcastTask.catch((error) => {
+          console.error('Falha no broadcast assíncrono do GSI:', error);
+        }),
+      );
+    } else {
+      try {
+        await broadcastTask;
+      } catch (error) {
+        console.error('Falha no broadcast do GSI:', error);
+        return jsonResponse({ error: 'Nao foi possivel transmitir o GSI.' }, 502);
+      }
     }
 
     return new Response(null, { status: 204, headers: corsHeaders });

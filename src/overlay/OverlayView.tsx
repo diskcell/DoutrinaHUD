@@ -449,7 +449,17 @@ export function OverlayView({ variant }: OverlayViewProps) {
       );
       
       if (found) {
-        observedPlayerObj = found;
+        const observedGsiPlayer = gsiState?.player || {};
+        observedPlayerObj = {
+          ...found,
+          state: observedGsiPlayer.state
+            ? { ...(found.state || {}), ...observedGsiPlayer.state }
+            : found.state,
+          match_stats: observedGsiPlayer.match_stats
+            ? { ...(found.match_stats || {}), ...observedGsiPlayer.match_stats }
+            : found.match_stats,
+          weapons: observedGsiPlayer.weapons || found.weapons,
+        };
       } else {
         const raw = gsiState.allplayers[observerTarget] || gsiState.player;
         observedPlayerObj = {

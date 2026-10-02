@@ -156,6 +156,7 @@ export function RadarMinimap({ mapName, players, observedSteamId, bomb, gsiState
             rotation={p.orientation}
             isObserved={observedSteamId === p.steamid}
             hasBomb={p.hasBomb}
+            sampleReceivedAt={gsiState?.received_at}
           />
         ))}
       </div>
