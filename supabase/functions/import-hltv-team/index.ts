@@ -100,13 +100,20 @@ type RosterPlayer = {
   id: string | null;
   url: string | null;
   nickname: string;
+  imageUrl: string | null;
 };
 
-function linkedPlayer(pathName: string, id: string, slug: string): RosterPlayer {
+function linkedPlayer(
+  pathName: string,
+  id: string,
+  slug: string,
+  imageUrl: string | null = null,
+): RosterPlayer {
   return {
     id,
     url: `${HLTV_ORIGIN}${pathName}`,
     nickname: decodeURIComponent(slug).replace(/-/g, ' '),
+    imageUrl,
   };
 }
 
@@ -141,6 +148,21 @@ function extractReaderStarterPlayers(markdown: string) {
     ? afterHeading.slice(0, nextHeading + 3)
     : afterHeading;
   const players = new Map<string, RosterPlayer>();
+
+  // A pagina do time traz a foto oficial do elenco atual junto de cada titular.
+  // O Jina Reader pode quebrar URLs longas em varias linhas, por isso aceitamos
+  // espacos dentro da URL e os removemos antes de salva-la.
+  const starterPattern = /\|\s*\[!\[[\s\S]*?\]\((https?:\/\/img-cdn\.hltv\.org\/playerbodyshot\/[^)]*)\)[\s\S]*?\]\(https?:\/\/www\.hltv\.org(\/player\/(\d+)\/([^\s)"'?#/]+))\)\s*\|\s*STARTER\s*\|/gi;
+
+  for (const match of playersSection.matchAll(starterPattern)) {
+    const [, rawImageUrl, pathName, id, slug] = match;
+    const imageUrl = normalizeEscapedUrl(rawImageUrl.replace(/\s+/g, ''));
+    if (!players.has(id)) players.set(id, linkedPlayer(pathName, id, slug, imageUrl));
+  }
+
+  if (players.size === 5) return Array.from(players.values());
+
+  players.clear();
 
   for (const line of playersSection.split(/\r?\n/)) {
     if (!/\|\s*STARTER\s*\|/i.test(line)) continue;
@@ -182,7 +204,7 @@ function extractReaderRoster(markdown: string) {
     if (!clean || ignored.has(normalized) || normalized.startsWith('#')) continue;
     if (!/^[\p{L}\p{N}_.\-']{1,24}$/u.test(clean)) continue;
 
-    roster.push({ id: null, url: null, nickname: clean });
+    roster.push({ id: null, url: null, nickname: clean, imageUrl: null });
     if (roster.length >= 5) break;
   }
 
@@ -377,7 +399,7 @@ async function downloadPlayerImage(
   const normalized = normalizeEscapedUrl(imageUrl);
   const candidates = normalized.includes('img-cdn.hltv.org')
     ? [
-        `https://images.weserv.nl/?url=${encodeURIComponent(normalized.replace(/^https?:\/\//, ''))}&output=webp&q=92`,
+        `https://images.weserv.nl/?url=${encodeURIComponent(normalized.replace(/^https?:\/\//, ''))}&w=400&fit=contain&output=webp&q=92`,
         normalized,
       ]
     : [normalized];
@@ -514,7 +536,7 @@ Deno.serve(async (request: Request) => {
     for (const rosterPlayer of roster) {
       let nickname = rosterPlayer.nickname;
       let realName = '';
-      let imageUrl = '';
+      let imageUrl = rosterPlayer.imageUrl || '';
       let hltvPlayerId = rosterPlayer.id;
       let hltvProfileUrl = rosterPlayer.url;
 
@@ -523,7 +545,7 @@ Deno.serve(async (request: Request) => {
           const profileText = await fetchHltvText(hltvProfileUrl);
           nickname = extractNickname(profileText, nickname);
           realName = extractRealName(profileText);
-          imageUrl = extractPlayerImage(profileText, nickname);
+          imageUrl = imageUrl || extractPlayerImage(profileText, nickname);
         } catch (error) {
           console.warn(`Perfil da HLTV indisponivel para ${nickname}.`, error);
         }
