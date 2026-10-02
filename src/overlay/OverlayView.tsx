@@ -47,6 +47,61 @@ function getManualTimerStatus(matchStatus: string | undefined) {
   }
 }
 
+function normalizeCompetitiveSide(side: unknown): 'CT' | 'T' {
+  return side === 'T' || side === 'TR' ? 'T' : 'CT';
+}
+
+function countPlayersFromTeam(players: any[], registeredPlayers: any[], teamId: unknown) {
+  const normalizedTeamId = String(teamId ?? '');
+  if (!normalizedTeamId) return 0;
+
+  return players.reduce((count, player) => {
+    const registeredPlayer = findRegisteredPlayer(player, registeredPlayers);
+    return String(registeredPlayer?.team_id ?? '') === normalizedTeamId
+      ? count + 1
+      : count;
+  }, 0);
+}
+
+function inferTeamHomeSide({
+  ctPlayers,
+  tPlayers,
+  registeredPlayers,
+  teamHome,
+  teamAway,
+  fallback,
+}: {
+  ctPlayers: any[];
+  tPlayers: any[];
+  registeredPlayers: any[];
+  teamHome: any;
+  teamAway: any;
+  fallback: 'CT' | 'T';
+}): 'CT' | 'T' {
+  if (!teamHome?.id || !teamAway?.id || registeredPlayers.length === 0) {
+    return fallback;
+  }
+
+  const homeOnCt = countPlayersFromTeam(ctPlayers, registeredPlayers, teamHome.id);
+  const homeOnT = countPlayersFromTeam(tPlayers, registeredPlayers, teamHome.id);
+  const awayOnCt = countPlayersFromTeam(ctPlayers, registeredPlayers, teamAway.id);
+  const awayOnT = countPlayersFromTeam(tPlayers, registeredPlayers, teamAway.id);
+
+  // Cada jogador identificado fornece evidencia para os dois lados: um jogador
+  // do time da casa no CT e um jogador visitante no TR apontam para a mesma
+  // associacao. Exigimos pelo menos dois acertos para evitar trocar o placar por
+  // causa de um apelido coincidente.
+  const homeIsCtEvidence = homeOnCt + awayOnT;
+  const homeIsTEvidence = homeOnT + awayOnCt;
+  const strongestEvidence = Math.max(homeIsCtEvidence, homeIsTEvidence);
+
+  if (strongestEvidence < 2 || homeIsCtEvidence === homeIsTEvidence) {
+    return fallback;
+  }
+
+  return homeIsCtEvidence > homeIsTEvidence ? 'CT' : 'T';
+}
+
 export function OverlayView({ variant }: OverlayViewProps) {
   const { socket, connected, sessionId, transport } = useSocket();
   const [selectedVariant, setSelectedVariant] = useState<OverlayVariant>(() => {
@@ -581,10 +636,43 @@ export function OverlayView({ variant }: OverlayViewProps) {
    ============================================================
   */
 
-  const leftTeamColor = match.sideHome === 'CT' ? 'CT' : 'T';
+  const leftTeamColor = normalizeCompetitiveSide(match.sideHome);
 
   const leftPlayers = leftTeamColor === 'CT' ? ctPlayers : tPlayers;
   const rightPlayers = leftTeamColor === 'CT' ? tPlayers : ctPlayers;
+  const inferredTeamHomeSide = autoMode
+    ? inferTeamHomeSide({
+        ctPlayers,
+        tPlayers,
+        registeredPlayers: dbPlayers,
+        teamHome: match.teamHome,
+        teamAway: match.teamAway,
+        fallback: leftTeamColor,
+      })
+    : leftTeamColor;
+  const teamHomeIsLeft = inferredTeamHomeSide === leftTeamColor;
+  const displayTeamLeft = teamHomeIsLeft ? match.teamHome : match.teamAway;
+  const displayTeamRight = teamHomeIsLeft ? match.teamAway : match.teamHome;
+  const gsiLeftScore = leftTeamColor === 'CT'
+    ? gsiState?.map?.team_ct?.score
+    : gsiState?.map?.team_t?.score;
+  const gsiRightScore = leftTeamColor === 'CT'
+    ? gsiState?.map?.team_t?.score
+    : gsiState?.map?.team_ct?.score;
+  const displayMatch = {
+    ...match,
+    teamHome: displayTeamLeft,
+    teamAway: displayTeamRight,
+    sideHome: leftTeamColor,
+    scoreHome: autoMode && gsiLeftScore !== undefined
+      ? Number(gsiLeftScore)
+      : teamHomeIsLeft ? match.scoreHome : match.scoreAway,
+    scoreAway: autoMode && gsiRightScore !== undefined
+      ? Number(gsiRightScore)
+      : teamHomeIsLeft ? match.scoreAway : match.scoreHome,
+    scoreSeriesHome: teamHomeIsLeft ? match.scoreSeriesHome : match.scoreSeriesAway,
+    scoreSeriesAway: teamHomeIsLeft ? match.scoreSeriesAway : match.scoreSeriesHome,
+  };
   const radarResetKey = [
     gsiState?.map?.name || match.currentMap || 'unknown_map',
     gsiState?.map?.round ?? '0',
@@ -600,7 +688,7 @@ export function OverlayView({ variant }: OverlayViewProps) {
       <BroadcastHud
         connected={connected}
         autoMode={autoMode}
-        match={match}
+        match={displayMatch}
         gsiState={gsiState}
         round={round}
         phase={phase}
@@ -643,7 +731,7 @@ export function OverlayView({ variant }: OverlayViewProps) {
       />
 
       <Scoreboard
-        match={match}
+        match={displayMatch}
         timerDisplay={timerDisplay}
         timerPhase={timerPhase}
         round={round}
@@ -719,14 +807,14 @@ export function OverlayView({ variant }: OverlayViewProps) {
       <RoundEndBanner
         round={round}
         players={[...leftPlayers, ...rightPlayers]}
-        match={match}
+        match={displayMatch}
         gsiState={gsiState}
       />
 
       <MatchEndBanner
         map={gsiState?.map}
         players={[...leftPlayers, ...rightPlayers]}
-        match={match}
+        match={displayMatch}
       />
 
       {autoMode && (

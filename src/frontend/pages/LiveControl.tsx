@@ -503,10 +503,6 @@ export function LiveControl() {
   };
 
   const swapSides = () => {
-    setSideHome((prev) =>
-      prev === 'CT' ? 'TR' : 'CT'
-    );
-
     const tempScore = scoreHome;
     setScoreHome(scoreAway);
     setScoreAway(tempScore);
