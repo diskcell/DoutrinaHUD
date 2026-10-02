@@ -2,6 +2,7 @@ import { cn } from '../AdminLayout';
 import { motion } from 'motion/react';
 import { getWeaponIcon } from './OverlayHelpers';
 import { PlayerPortrait } from './PlayerPortrait';
+import { useImmediateActiveWeapon } from './useImmediateActiveWeapon';
 
 interface PlayerCardProps {
   player: any;
@@ -24,8 +25,7 @@ export function PlayerCard({ player, isRightSide, isObserved }: PlayerCardProps)
   const isLowHP = health > 0 && health <= 25;
   
   // Weapons logic
-  const weapons = Object.values<any>(p.weapons || {});
-  const activeWeapon = weapons.find(w => w.state === 'active');
+  const { weapons, activeWeapon } = useImmediateActiveWeapon(p.weapons);
   const grenades = weapons.filter(w => String(w.type || '').toLowerCase().includes('grenade'));
   const c4 = weapons.find(w => w.type === 'C4' || w.name === 'weapon_c4');
   const activeWeaponType = String(activeWeapon?.type || '').toLowerCase();

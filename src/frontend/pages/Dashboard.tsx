@@ -58,8 +58,8 @@ function createOnlineGsiConfig(session: OnlineSession, endpoint: string) {
 {
   "uri" "${endpoint}"
   "timeout" "5.0"
-  "buffer" "0.05"
-  "throttle" "0.20"
+  "buffer" "0.01"
+  "throttle" "0.05"
   "heartbeat" "30.0"
 
   "auth"

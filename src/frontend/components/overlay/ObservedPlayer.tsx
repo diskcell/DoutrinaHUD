@@ -1,8 +1,9 @@
 import { cn } from '../../components/AdminLayout';
 import { Crosshair, Skull, Activity } from 'lucide-react';
-import { formatWeaponName, getWeaponIcon } from './OverlayHelpers';
+import { getWeaponIcon } from './OverlayHelpers';
 import { PlayerPortrait } from './PlayerPortrait';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
+import { useImmediateActiveWeapon } from './useImmediateActiveWeapon';
 
 function getWeaponText(weapon: any, field: 'name' | 'type') {
   return String(weapon?.[field] || '').toLowerCase();
@@ -42,27 +43,9 @@ function hasWeaponAmmo(weapon: any) {
   return Number.isFinite(ammoClip) && ammoClip >= 0;
 }
 
-function getObservedActiveWeapon(weapons: any[]) {
-  const activeWeapons = weapons.filter((weapon) => weapon?.state === 'active');
-
-  if (activeWeapons.length <= 1) {
-    return activeWeapons[0] || null;
-  }
-
-  return [...activeWeapons].sort((a, b) => {
-    const priority = (weapon: any) => {
-      if (!isNonAmmoItem(weapon) && hasWeaponAmmo(weapon)) return 4;
-      if (!isNonAmmoItem(weapon)) return 3;
-      if (isGrenadeWeapon(weapon)) return 2;
-      if (hasWeaponAmmo(weapon)) return 1;
-      return 0;
-    };
-
-    return priority(b) - priority(a);
-  })[0] || null;
-}
-
 export function ObservedPlayer({ player }: { player: any }) {
+  const { activeWeapon } = useImmediateActiveWeapon(player?.weapons);
+
   if (!player) return null;
 
   const health = player.state?.health ?? 0;
@@ -71,8 +54,6 @@ export function ObservedPlayer({ player }: { player: any }) {
   const armor = player.state?.armor ?? 0;
   const helmet = player.state?.helmet ?? false;
   
-  const weapons = player.weapons ? Object.values(player.weapons) : [];
-  const activeWeapon = getObservedActiveWeapon(weapons as any[]);
   const showAmmo = activeWeapon && !isNonAmmoItem(activeWeapon) && hasWeaponAmmo(activeWeapon);
 
   const isCT = player.team === 'CT';
@@ -163,20 +144,14 @@ export function ObservedPlayer({ player }: { player: any }) {
              {/* Right Section: Weapon & Ammo - COMPACT */}
              <div className="w-[170px] flex items-center justify-end gap-3 pr-6 pl-3 shrink-0 border-l border-white/10 h-full bg-black/20 overflow-visible rounded-r-xl">
                <div className="flex-1 flex justify-center items-center overflow-visible min-w-0">
-                 <AnimatePresence initial={false} mode="popLayout">
-                   {activeWeapon && (
-                     <motion.img 
-                       key={activeWeapon.name}
-                       initial={{ scale: 0.9, opacity: 0 }}
-                       animate={{ scale: 1, opacity: 1 }}
-                       exit={{ scale: 0.9, opacity: 0 }}
-                       transition={{ duration: 0.08, ease: 'easeOut' }}
-                       src={getWeaponIcon(activeWeapon.name)} 
-                       className="h-8 w-auto max-w-[105px] object-contain brightness-0 invert opacity-90 drop-shadow-2xl"
-                       onError={(e) => (e.currentTarget.style.display = 'none')}
-                     />
-                   )}
-                 </AnimatePresence>
+                 {activeWeapon && (
+                   <img
+                     key={activeWeapon.name}
+                     src={getWeaponIcon(activeWeapon.name)}
+                     className="h-8 w-auto max-w-[105px] object-contain brightness-0 invert opacity-90 drop-shadow-2xl"
+                     onError={(e) => (e.currentTarget.style.display = 'none')}
+                   />
+                 )}
                </div>
 
                {showAmmo && (

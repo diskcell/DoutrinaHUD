@@ -9,6 +9,7 @@ import { PlayerPortrait } from '../frontend/components/overlay/PlayerPortrait';
 import { RadarMinimap } from '../frontend/components/overlay/RadarMinimap';
 import { RoundEndBanner } from '../frontend/components/overlay/RoundEndBanner';
 import { getWeaponIcon } from '../frontend/components/overlay/OverlayHelpers';
+import { useImmediateActiveWeapon } from '../frontend/components/overlay/useImmediateActiveWeapon';
 
 interface BroadcastHudProps {
   connected: boolean;
@@ -40,11 +41,6 @@ function getTeamScore(side: 'CT' | 'T', gsiState: any, fallback: number) {
 
 function getTeamLabel(team: any, fallback: string) {
   return String(team?.tag || team?.name || fallback).toUpperCase().slice(0, 6);
-}
-
-function getActiveWeapon(player: any) {
-  const weapons = Object.values<any>(player?.weapons || {});
-  return weapons.find((weapon) => weapon?.state === 'active') || null;
 }
 
 function getGrenades(player: any) {
@@ -184,12 +180,12 @@ function BroadcastPlayerCard({
   isObserved?: boolean;
   align?: 'left' | 'right';
 }) {
+  const { activeWeapon } = useImmediateActiveWeapon(player?.weapons);
   const health = Number(player?.state?.health ?? 0);
   const armor = Number(player?.state?.armor ?? 0);
   const helmet = Boolean(player?.state?.helmet);
   const money = Number(player?.state?.money ?? 0);
   const stats = player?.match_stats || {};
-  const activeWeapon = getActiveWeapon(player);
   const grenades = getGrenades(player);
   const isDead = health <= 0;
   const isCT = player?.team === 'CT';
@@ -307,9 +303,10 @@ function BroadcastPlayerDock({
 }
 
 function BroadcastObservedBar({ player }: { player: any }) {
+  const { activeWeapon } = useImmediateActiveWeapon(player?.weapons);
+
   if (!player) return null;
 
-  const activeWeapon = getActiveWeapon(player);
   const health = Number(player?.state?.health ?? 0);
   const stats = player?.match_stats || {};
 

@@ -602,6 +602,23 @@ export function OverlayView({ variant }: OverlayViewProps) {
     observedPlayerObj = tPlayers[2];
   }
 
+  // O bloco `player` do GSI costuma refletir a troca de item observado antes do
+  // bloco coletivo `allplayers`. Reaproveitamos os mesmos dados no card lateral
+  // para que ele e a barra central mudem no mesmo pacote.
+  if (observerTarget && observedPlayerObj) {
+    const applyObservedState = (player: any) => player.steamid === observerTarget
+      ? {
+          ...player,
+          state: observedPlayerObj.state || player.state,
+          match_stats: observedPlayerObj.match_stats || player.match_stats,
+          weapons: observedPlayerObj.weapons || player.weapons,
+        }
+      : player;
+
+    ctPlayers = ctPlayers.map(applyObservedState);
+    tPlayers = tPlayers.map(applyObservedState);
+  }
+
   /*
    ============================================================
    RADAR PLAYERS OBJECT
