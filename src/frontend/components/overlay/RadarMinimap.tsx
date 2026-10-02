@@ -35,7 +35,7 @@ type RadarLevel = 'default' | 'lower';
 
 const NUKE_MAIN_FLOOR_STYLE = {
   left: '8%',
-  top: '19%',
+  top: '11%',
   width: '92%',
   height: '92%',
 };
