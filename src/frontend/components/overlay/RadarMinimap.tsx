@@ -144,6 +144,7 @@ export function RadarMinimap({ mapName, players, observedSteamId, bomb, gsiState
             x={bombData.radarPos.x}
             y={bombData.radarPos.y}
             state={bombData.state}
+            sampleReceivedAt={gsiState?.received_at}
           />
         )}
 

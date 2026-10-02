@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import { TrackedGrenade } from '../../lib/gsi/grenadeTracker';
 
@@ -13,6 +13,10 @@ const RADAR_PERCENT_TO_PX = RADAR_SIZE_PX / 100;
 const MOLOTOV_FIRE_RADIUS_PX = 14;
 const SMOKE_EXTINGUISH_RADIUS_PX = 16;
 const SMOKE_FULL_EXTINGUISH_CENTER_DISTANCE_PX = 12;
+const DEFAULT_PROJECTILE_TWEEN_SECONDS = 0.62;
+const MIN_PROJECTILE_TWEEN_SECONDS = 0.2;
+const MAX_PROJECTILE_TWEEN_SECONDS = 0.78;
+const PROJECTILE_TELEPORT_DISTANCE_PERCENT = 40;
 
 const TYPE_COLORS: Record<string, string> = {
   smoke: '#cbd5e1',
@@ -102,6 +106,34 @@ export function RadarGrenadeIcon({ grenade, players, grenades }: RadarGrenadeIco
   const color = TYPE_COLORS[grenade.type] || '#ffffff';
   const icon = TYPE_ICONS[grenade.type];
   const { x, y } = grenade.radarPos;
+  const previousPositionRef = useRef({ x, y });
+  const previousUpdateRef = useRef<number | null>(null);
+  const tweenDurationRef = useRef(DEFAULT_PROJECTILE_TWEEN_SECONDS);
+
+  if (grenade.lastUpdate !== previousUpdateRef.current) {
+    if (previousUpdateRef.current !== null) {
+      const intervalSeconds = (grenade.lastUpdate - previousUpdateRef.current) / 1000;
+      if (intervalSeconds > 0 && intervalSeconds < 3) {
+        const desiredDuration = Math.min(
+          MAX_PROJECTILE_TWEEN_SECONDS,
+          Math.max(MIN_PROJECTILE_TWEEN_SECONDS, intervalSeconds * 1.12),
+        );
+        tweenDurationRef.current =
+          tweenDurationRef.current * 0.35 + desiredDuration * 0.65;
+      }
+    }
+    previousUpdateRef.current = grenade.lastUpdate;
+  }
+
+  const projectileDistance = Math.hypot(
+    x - previousPositionRef.current.x,
+    y - previousPositionRef.current.y,
+  );
+  const shouldSnapProjectile = projectileDistance >= PROJECTILE_TELEPORT_DISTANCE_PERCENT;
+
+  useEffect(() => {
+    previousPositionRef.current = { x, y };
+  }, [x, y]);
 
   const ownerTeam = getOwnerTeam(grenade, players);
   const isDeployed = grenade.isDeployed;
@@ -513,12 +545,20 @@ export function RadarGrenadeIcon({ grenade, players, grenades }: RadarGrenadeIco
    ============================================================
   */
   return (
-    <div
-      className="absolute pointer-events-none z-[20] will-change-transform"
-      style={{
+    <motion.div
+      initial={false}
+      animate={{
         left: `${x}%`,
         top: `${y}%`,
+      }}
+      transition={{
+        duration: shouldSnapProjectile ? 0 : tweenDurationRef.current,
+        ease: 'linear',
+      }}
+      className="absolute pointer-events-none z-[20] will-change-transform"
+      style={{
         transform: 'translate(-50%, -50%)',
+        willChange: 'left, top',
       }}
     >
       <div className="relative flex items-center justify-center">
@@ -550,6 +590,6 @@ export function RadarGrenadeIcon({ grenade, players, grenades }: RadarGrenadeIco
           />
         )}
       </div>
-    </div>
+    </motion.div>
   );
 }
