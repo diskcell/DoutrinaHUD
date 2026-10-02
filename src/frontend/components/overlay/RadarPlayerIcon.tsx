@@ -11,6 +11,14 @@ interface RadarPlayerIconProps {
   hasBomb: boolean;
 }
 
+const POSITION_TWEEN_SECONDS = 0.23;
+const ROTATION_TWEEN_SECONDS = 0.18;
+const TELEPORT_DISTANCE_PERCENT = 18;
+
+function shortestAngleDelta(from: number, to: number) {
+  return ((to - from + 540) % 360) - 180;
+}
+
 function getActiveWeapon(player: any) {
   const weapons = Object.values<any>(player?.weapons || {});
 
@@ -44,6 +52,26 @@ export function RadarPlayerIcon({
   const isCT = player.team === 'CT';
   const health = player.state?.health ?? 0;
   const isDead = health <= 0;
+  const safeRotation = Number.isFinite(rotation) ? rotation : 0;
+  const previousPositionRef = useRef({ x, y });
+  const previousRotationRef = useRef(safeRotation);
+  const [continuousRotation, setContinuousRotation] = useState(safeRotation);
+
+  const positionDistance = Math.hypot(
+    x - previousPositionRef.current.x,
+    y - previousPositionRef.current.y,
+  );
+  const shouldSnapPosition = positionDistance >= TELEPORT_DISTANCE_PERCENT;
+
+  useEffect(() => {
+    previousPositionRef.current = { x, y };
+  }, [x, y]);
+
+  useEffect(() => {
+    const delta = shortestAngleDelta(previousRotationRef.current, safeRotation);
+    previousRotationRef.current = safeRotation;
+    setContinuousRotation((current) => current + delta);
+  }, [safeRotation]);
 
   const previousWeaponRef = useRef<{
     name: string | null;
@@ -89,15 +117,23 @@ export function RadarPlayerIcon({
   const isBombCarrier = hasBomb && !isDead;
 
   return (
-    <div
+    <motion.div
+      initial={false}
+      animate={{
+        left: `${x}%`,
+        top: `${y}%`,
+      }}
+      transition={{
+        duration: shouldSnapPosition ? 0 : POSITION_TWEEN_SECONDS,
+        ease: 'linear',
+      }}
       className={cn(
         'absolute pointer-events-none',
         isDead ? 'opacity-35 grayscale z-0' : isObserved ? 'z-50' : 'z-10'
       )}
       style={{
-        left: `${x}%`,
-        top: `${y}%`,
         transform: 'translate(-50%, -50%)',
+        willChange: 'left, top',
       }}
     >
       <div
@@ -122,11 +158,14 @@ export function RadarPlayerIcon({
           />
         )}
 
-        <div
-          className="absolute inset-0 w-full h-full drop-shadow-md"
-          style={{
-            transform: `rotate(${rotation}deg)`,
+        <motion.div
+          initial={false}
+          animate={{ rotate: continuousRotation }}
+          transition={{
+            duration: shouldSnapPosition ? 0 : ROTATION_TWEEN_SECONDS,
+            ease: 'linear',
           }}
+          className="absolute inset-0 w-full h-full drop-shadow-md"
         >
           <svg viewBox="0 0 100 100" className="w-full h-full">
             {!isDead && (
@@ -200,7 +239,7 @@ export function RadarPlayerIcon({
               strokeWidth={isObserved ? '8' : '4'}
             />
           </svg>
-        </div>
+        </motion.div>
 
         {!isDead && (
           <span
@@ -222,6 +261,6 @@ export function RadarPlayerIcon({
           </div>
         )}
       </div>
-    </div>
+    </motion.div>
   );
 }
