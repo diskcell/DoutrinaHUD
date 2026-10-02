@@ -31,6 +31,22 @@ interface RadarEntityLayerProps {
   compact?: boolean;
 }
 
+type RadarLevel = 'default' | 'lower';
+
+const NUKE_MAIN_FLOOR_STYLE = {
+  left: '8%',
+  top: '19%',
+  width: '92%',
+  height: '92%',
+};
+
+const NUKE_LOWER_FLOOR_STYLE = {
+  left: '-2%',
+  top: '-4%',
+  width: '62%',
+  height: '62%',
+};
+
 function getBombState(bomb: any) {
   return String(bomb?.state || '').toLowerCase();
 }
@@ -52,6 +68,51 @@ function isLowerLevel(position: unknown, config: MapConfig) {
 
   if (!pos || !lowerSection || !Number.isFinite(pos.z)) return false;
   return pos.z <= lowerSection.AltitudeMax && pos.z >= lowerSection.AltitudeMin;
+}
+
+function getFloorImageSize(config: MapConfig, level: RadarLevel) {
+  if (level === 'lower') {
+    return config.lower_image_size || config.image_size || 1024;
+  }
+
+  return config.image_size || 1024;
+}
+
+function projectPosition(position: unknown, config: MapConfig, level: RadarLevel) {
+  const pos = parsePosition(position);
+  if (!pos) return null;
+
+  return worldToRadar(pos, config, getFloorImageSize(config, level));
+}
+
+function clampRadarPercent(value: number) {
+  return Math.max(0, Math.min(100, value));
+}
+
+function projectTrackedGrenade(
+  grenade: TrackedGrenade,
+  config: MapConfig,
+  level: RadarLevel,
+): TrackedGrenade {
+  const sourceSize = config.image_size || 1024;
+  const targetSize = getFloorImageSize(config, level);
+
+  if (sourceSize === targetSize) return grenade;
+
+  const scalePoint = <T extends { x: number; y: number }>(point: T): T => ({
+    ...point,
+    x: clampRadarPercent(point.x * sourceSize / targetSize),
+    y: clampRadarPercent(point.y * sourceSize / targetSize),
+  });
+
+  return {
+    ...grenade,
+    radarPos: scalePoint(grenade.radarPos),
+    lastRadarPos: grenade.lastRadarPos
+      ? scalePoint(grenade.lastRadarPos)
+      : undefined,
+    trail: grenade.trail.map(scalePoint),
+  };
 }
 
 function RadarEntityLayer({
@@ -138,10 +199,18 @@ export function RadarMinimap({
     const pos = parsePosition(bomb.position);
     if (!pos) return null;
 
+    const radarLevel: RadarLevel = hasLowerLevel && isLowerLevel(pos, assets.config)
+      ? 'lower'
+      : 'default';
+
     return {
       state: bombState as 'planted' | 'dropped',
-      radarPos: worldToRadar(pos, assets.config),
-      radarLevel: hasLowerLevel && isLowerLevel(pos, assets.config) ? 'lower' : 'default',
+      radarPos: worldToRadar(
+        pos,
+        assets.config,
+        getFloorImageSize(assets.config, radarLevel),
+      ),
+      radarLevel,
     };
   }, [bomb, assets, hasLowerLevel]);
 
@@ -162,10 +231,14 @@ export function RadarMinimap({
     let orientation = getPlayerRotation(player);
     if (assets.config.rotate) orientation += assets.config.rotate;
 
+    const radarLevel: RadarLevel = hasLowerLevel && isLowerLevel(pos, assets.config)
+      ? 'lower'
+      : 'default';
+
     return {
       ...player,
-      radarPos: worldToRadar(pos, assets.config),
-      radarLevel: hasLowerLevel && isLowerLevel(pos, assets.config) ? 'lower' : 'default',
+      radarPos: projectPosition(pos, assets.config, radarLevel),
+      radarLevel,
       orientation,
       hasBomb: isPlayerCarryingBomb(player),
     };
@@ -173,11 +246,13 @@ export function RadarMinimap({
 
   const upperPlayers = playersList.filter((player) => player.radarLevel !== 'lower');
   const lowerPlayers = playersList.filter((player) => player.radarLevel === 'lower');
-  const upperGrenades = trackedGrenades.filter(
-    (grenade) => !hasLowerLevel || !isLowerLevel(grenade.position, assets.config),
-  );
+  const upperGrenades = trackedGrenades
+    .filter((grenade) => !hasLowerLevel || !isLowerLevel(grenade.position, assets.config))
+    .map((grenade) => projectTrackedGrenade(grenade, assets.config, 'default'));
   const lowerGrenades = hasLowerLevel
-    ? trackedGrenades.filter((grenade) => isLowerLevel(grenade.position, assets.config))
+    ? trackedGrenades
+        .filter((grenade) => isLowerLevel(grenade.position, assets.config))
+        .map((grenade) => projectTrackedGrenade(grenade, assets.config, 'lower'))
     : [];
   const upperBomb = bombData?.radarLevel === 'lower' ? null : bombData;
   const lowerBomb = bombData?.radarLevel === 'lower' ? bombData : null;
@@ -185,59 +260,74 @@ export function RadarMinimap({
   return (
     <div className={cn('absolute top-8 left-8 w-[400px] h-[400px] z-40', className)}>
       <div className="relative w-full h-full overflow-hidden shadow-sm">
-        <img
-          src={assets.image}
-          alt="Radar principal"
-          className="absolute inset-0 z-0 h-full w-full select-none object-fill opacity-100 pointer-events-none"
-          onError={(event) => {
-            event.currentTarget.style.display = 'none';
-          }}
-        />
+        {hasLowerLevel && assets.lowerImage ? (
+          <>
+            <div className="absolute z-10" style={NUKE_MAIN_FLOOR_STYLE}>
+              <img
+                src={assets.image}
+                alt="Radar do piso principal"
+                className="absolute inset-0 h-full w-full select-none object-fill pointer-events-none"
+              />
 
-        <div className="absolute inset-0 z-10">
-          <RadarEntityLayer
-            players={upperPlayers}
-            grenades={upperGrenades}
-            allPlayers={playersArray}
-            bombData={upperBomb}
-            observedSteamId={observedSteamId}
-            sampleReceivedAt={gsiState?.received_at}
-          />
-        </div>
+              <div className="absolute inset-0 z-10">
+                <RadarEntityLayer
+                  players={upperPlayers}
+                  grenades={upperGrenades}
+                  allPlayers={playersArray}
+                  bombData={upperBomb}
+                  observedSteamId={observedSteamId}
+                  sampleReceivedAt={gsiState?.received_at}
+                />
+              </div>
+            </div>
 
-        {hasLowerLevel && assets.lowerImage && (
-          <div className="absolute -top-[4%] left-[1%] z-20 h-[53%] w-[53%]">
+            <div className="absolute z-20" style={NUKE_LOWER_FLOOR_STYLE}>
+              <img
+                src={assets.lowerImage}
+                alt="Radar do subsolo"
+                className="absolute inset-0 h-full w-full select-none object-fill opacity-95 brightness-[0.82] drop-shadow-[0_8px_16px_rgba(0,0,0,0.72)] pointer-events-none"
+              />
+
+              <div className="absolute inset-0 z-10">
+                <RadarEntityLayer
+                  players={lowerPlayers}
+                  grenades={lowerGrenades}
+                  allPlayers={playersArray}
+                  bombData={lowerBomb}
+                  observedSteamId={observedSteamId}
+                  sampleReceivedAt={gsiState?.received_at}
+                  compact
+                />
+              </div>
+
+              <div className="absolute left-[4%] top-[15%] z-30 rounded-sm border border-white/10 bg-black/70 px-2 py-1 text-[8px] font-black uppercase tracking-[0.18em] text-white/70">
+                SUBSOLO
+              </div>
+            </div>
+
+            <div className="absolute bottom-[5%] right-[3%] z-30 rounded-sm border border-white/10 bg-black/60 px-2 py-1 text-[8px] font-black uppercase tracking-[0.16em] text-white/55">
+              PISO PRINCIPAL
+            </div>
+          </>
+        ) : (
+          <>
             <img
-              src={assets.lowerImage}
-              alt="Radar do subsolo"
-              className="absolute inset-0 h-full w-full select-none object-fill opacity-75 brightness-75 saturate-75 drop-shadow-[0_8px_16px_rgba(0,0,0,0.75)] pointer-events-none"
-              onError={(event) => {
-                event.currentTarget.style.display = 'none';
-              }}
+              src={assets.image}
+              alt="Radar"
+              className="absolute inset-0 h-full w-full select-none object-fill pointer-events-none"
             />
 
             <div className="absolute inset-0 z-10">
               <RadarEntityLayer
-                players={lowerPlayers}
-                grenades={lowerGrenades}
+                players={upperPlayers}
+                grenades={upperGrenades}
                 allPlayers={playersArray}
-                bombData={lowerBomb}
+                bombData={upperBomb}
                 observedSteamId={observedSteamId}
                 sampleReceivedAt={gsiState?.received_at}
-                compact
               />
             </div>
-
-            <div className="absolute left-2 top-2 z-30 rounded-sm border border-white/10 bg-black/75 px-2 py-1 text-[8px] font-black uppercase tracking-[0.18em] text-white/65">
-              SUBSOLO
-            </div>
-          </div>
-        )}
-
-        {hasLowerLevel && (
-          <div className="absolute bottom-3 right-3 z-30 rounded-sm border border-white/10 bg-black/60 px-2 py-1 text-[8px] font-black uppercase tracking-[0.16em] text-white/45">
-            PISO PRINCIPAL
-          </div>
+          </>
         )}
       </div>
     </div>

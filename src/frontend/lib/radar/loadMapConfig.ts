@@ -2,6 +2,8 @@ export interface MapConfig {
   map: string;
   image: string;
   lower_image?: string;
+  image_size?: number;
+  lower_image_size?: number;
   pos_x: number;
   pos_y: number;
   scale: number;
@@ -74,6 +76,8 @@ const MAP_CONFIGS: Record<string, MapConfig> = {
     "map": "de_nuke",
     "image": "radar.png",
     "lower_image": "radar_lower.webp",
+    "image_size": 1024,
+    "lower_image_size": 1000,
     "pos_x": -3453,
     "pos_y": 2887,
     "scale": 7,

@@ -13,7 +13,11 @@ function clamp(value: number, min = 0, max = 100) {
   return Math.max(min, Math.min(max, value));
 }
 
-export function worldToRadar(pos: Vector3, config: MapConfig): RadarCoord {
+export function worldToRadar(
+  pos: Vector3,
+  config: MapConfig,
+  imageSizeOverride?: number,
+): RadarCoord {
   const { pos_x, pos_y, scale } = config;
 
   if (
@@ -28,7 +32,7 @@ export function worldToRadar(pos: Vector3, config: MapConfig): RadarCoord {
     return { x: 50, y: 50, outOfBounds: true };
   }
 
-  const imageSize = (config as any).imageSize || DEFAULT_IMAGE_SIZE;
+  const imageSize = imageSizeOverride || config.image_size || DEFAULT_IMAGE_SIZE;
 
   const radarPixelX = (pos.x - pos_x) / scale;
   const radarPixelY = (pos_y - pos.y) / scale;

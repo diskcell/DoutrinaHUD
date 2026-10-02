@@ -2,6 +2,8 @@
   "map": "de_nuke",
   "image": "radar.png",
   "lower_image": "radar_lower.webp",
+  "image_size": 1024,
+  "lower_image_size": 1000,
   "pos_x": -3453,
   "pos_y": 2887,
   "scale": 7,
