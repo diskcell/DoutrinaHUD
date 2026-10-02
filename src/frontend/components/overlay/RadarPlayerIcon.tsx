@@ -10,6 +10,7 @@ interface RadarPlayerIconProps {
   isObserved: boolean;
   hasBomb: boolean;
   sampleReceivedAt?: string | null;
+  compact?: boolean;
 }
 
 const DEFAULT_TWEEN_SECONDS = 0.62;
@@ -51,6 +52,7 @@ export function RadarPlayerIcon({
   isObserved,
   hasBomb,
   sampleReceivedAt,
+  compact = false,
 }: RadarPlayerIconProps) {
   const isCT = player.team === 'CT';
   const health = player.state?.health ?? 0;
@@ -131,8 +133,8 @@ export function RadarPlayerIcon({
   const teamColor = isCT ? '#3b82f6' : '#f59e0b';
   const teamAccent = isCT ? '#93c5fd' : '#fcd34d';
 
-  const markerSize = 18;
-  const arrowSize = 8;
+  const markerSize = compact ? 14 : 18;
+  const arrowSize = compact ? 6 : 8;
   const markerBoxSize = markerSize + arrowSize * 2;
 
   const isBombCarrier = hasBomb && !isDead;
@@ -267,8 +269,8 @@ export function RadarPlayerIcon({
             className={cn(
               'absolute inset-0 flex items-center justify-center select-none font-black tracking-tighter leading-none z-20',
               isObserved || isBombCarrier
-                ? 'text-white text-[11px]'
-                : 'text-white text-[10px] drop-shadow-sm',
+                ? compact ? 'text-white text-[9px]' : 'text-white text-[11px]'
+                : compact ? 'text-white text-[8px] drop-shadow-sm' : 'text-white text-[10px] drop-shadow-sm',
               isObserved && !isBombCarrier ? 'text-black' : ''
             )}
           >

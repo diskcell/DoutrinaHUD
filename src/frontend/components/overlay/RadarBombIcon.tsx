@@ -7,11 +7,12 @@ interface RadarBombIconProps {
   y: number;
   state: 'planted' | 'dropped' | 'carried';
   sampleReceivedAt?: string | null;
+  compact?: boolean;
 }
 
 const DEFAULT_BOMB_TWEEN_SECONDS = 0.62;
 
-export function RadarBombIcon({ x, y, state, sampleReceivedAt }: RadarBombIconProps) {
+export function RadarBombIcon({ x, y, state, sampleReceivedAt, compact = false }: RadarBombIconProps) {
   const previousSampleTimeRef = useRef<number | null>(null);
   const tweenDurationRef = useRef(DEFAULT_BOMB_TWEEN_SECONDS);
   const sampleTime = sampleReceivedAt ? Date.parse(sampleReceivedAt) : Number.NaN;
@@ -39,7 +40,9 @@ export function RadarBombIcon({ x, y, state, sampleReceivedAt }: RadarBombIconPr
       }}
       className={cn(
         "absolute -translate-x-1/2 -translate-y-1/2 z-20",
-        state === 'planted' ? "scale-150" : "scale-110"
+        compact
+          ? state === 'planted' ? "scale-100" : "scale-90"
+          : state === 'planted' ? "scale-150" : "scale-110"
       )}
       style={{ willChange: 'left, top' }}
     >

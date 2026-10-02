@@ -73,7 +73,7 @@ const MAP_CONFIGS: Record<string, MapConfig> = {
   "de_nuke": {
     "map": "de_nuke",
     "image": "radar.png",
-    "lower_image": "radar_lower.png",
+    "lower_image": "radar_lower.webp",
     "pos_x": -3453,
     "pos_y": 2887,
     "scale": 7,
