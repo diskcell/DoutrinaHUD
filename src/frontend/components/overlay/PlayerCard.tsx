@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { getWeaponIcon } from './OverlayHelpers';
 import { PlayerPortrait } from './PlayerPortrait';
 import { useImmediateActiveWeapon } from './useImmediateActiveWeapon';
+import { PlayerHealthBar, getHealthTextClass } from './PlayerHealthBar';
 
 interface PlayerCardProps {
   player: any;
@@ -64,18 +65,10 @@ export function PlayerCard({ player, isRightSide, isObserved }: PlayerCardProps)
       }}
     >
       
-      {/* HP Bar Background (Animated) */}
-      <motion.div 
-        initial={false}
-        animate={{ 
-          width: `${health}%`,
-          backgroundColor: isLowHP ? '#dc2626' : teamColorHex
-        }}
-        transition={{ duration: 0.4, ease: "easeOut" }}
-        className={cn(
-          "absolute bottom-0 h-[4px] z-20",
-          isRightSide ? "right-0" : "left-0"
-        )}
+      <PlayerHealthBar
+        health={health}
+        isRightSide={isRightSide}
+        className="absolute inset-x-0 bottom-0 z-40 h-[6px]"
       />
 
       {/* Team Indicator Strip */}
@@ -109,7 +102,7 @@ export function PlayerCard({ player, isRightSide, isObserved }: PlayerCardProps)
           </span>
           <span className={cn(
             "text-2xl font-black tabular-nums leading-none ml-auto",
-            isDead ? "text-neutral-700" : isLowHP ? "text-red-500 animate-pulse" : "text-white"
+            isDead ? "text-neutral-700" : getHealthTextClass(health)
           )}>
             {health}
           </span>
@@ -189,7 +182,7 @@ export function PlayerCard({ player, isRightSide, isObserved }: PlayerCardProps)
 
       {/* Low HP Red Overlay Flash */}
       {isLowHP && (
-        <div className="absolute inset-0 bg-red-600/10 animate-pulse pointer-events-none z-0" />
+        <div className="absolute inset-0 bg-red-600/[0.07] pointer-events-none z-0" />
       )}
     </motion.div>
   );

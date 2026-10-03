@@ -4,6 +4,7 @@ import { getWeaponIcon } from './OverlayHelpers';
 import { PlayerPortrait } from './PlayerPortrait';
 import { motion } from 'motion/react';
 import { useImmediateActiveWeapon } from './useImmediateActiveWeapon';
+import { PlayerHealthBar, getHealthTextClass } from './PlayerHealthBar';
 
 function getWeaponText(weapon: any, field: 'name' | 'type') {
   return String(weapon?.[field] || '').toLowerCase();
@@ -88,14 +89,21 @@ export function ObservedPlayer({ player }: { player: any }) {
           "w-full h-[82px] bg-neutral-950/95 backdrop-blur-2xl shadow-[0_25px_50px_rgba(0,0,0,0.8)] flex items-center relative overflow-visible rounded-xl border border-white/5",
           isCT ? "shadow-blue-500/10" : "shadow-orange-500/10"
         )}>
-          
-          {/* HP Bar Background */}
-          <div 
-            className={cn("absolute inset-0 transition-all duration-300 opacity-[0.15] z-0", 
-              isCT ? "bg-blue-600" : "bg-orange-600", 
-              health <= 20 && !isDead ? 'bg-red-600 opacity-40 animate-pulse' : ''
-            )} 
-            style={{ width: `${health}%` }} 
+
+          {/* Team identity never changes with health. */}
+          <div
+            className={cn(
+              'absolute inset-x-0 top-0 z-20 h-[3px] rounded-t-xl',
+              isCT ? 'bg-blue-500' : 'bg-orange-500',
+            )}
+          />
+          <div
+            className={cn(
+              'absolute inset-0 z-0 rounded-xl opacity-[0.08]',
+              isCT
+                ? 'bg-gradient-to-r from-blue-500 via-blue-500/20 to-transparent'
+                : 'bg-gradient-to-r from-orange-500 via-orange-500/20 to-transparent',
+            )}
           />
 
           {/* Content Container */}
@@ -110,7 +118,7 @@ export function ObservedPlayer({ player }: { player: any }) {
                      key={health}
                      className={cn(
                        "text-3xl font-black tabular-nums italic leading-none drop-shadow-2xl",
-                       health <= 20 ? "text-red-500 animate-pulse" : "text-white"
+                       getHealthTextClass(health)
                      )}
                    >
                      {health}
@@ -169,6 +177,11 @@ export function ObservedPlayer({ player }: { player: any }) {
                )}
              </div>
           </div>
+
+          <PlayerHealthBar
+            health={health}
+            className="absolute inset-x-0 bottom-0 z-30 h-[8px] rounded-b-xl"
+          />
         </div>
       </div>
     </motion.div>
